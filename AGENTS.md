@@ -1,144 +1,168 @@
-# Agent instructions
+# Ieum firmware agent instructions
 
-This repository is the [Meshtastic](https://meshtastic.org) firmware — a C++17 embedded codebase targeting ESP32 / nRF52 / RP2040 / STM32WL / Linux-Portduino LoRa mesh radios — plus a Python MCP server in `mcp-server/` that AI agents use to flash, configure, and test connected devices.
+## Instruction priority
 
-## Primary instruction file
+Apply repository instructions in this order:
 
-**Read `.github/copilot-instructions.md` first.** That file is the canonical agent-facing document for this repo. It covers project layout, coding conventions (naming, module framework, Observer pattern, thread safety), the build system, CI/CD, the native C++ test suite, and — most importantly for automation work — the **MCP Server & Hardware Test Harness** section. Read it top-to-bottom before starting any non-trivial change.
+1. **Ieum-specific rules in this `AGENTS.md`**
+2. **Upstream Meshtastic rules in `.github/copilot-instructions.md`**
+3. Existing code conventions and nearby implementation patterns
 
-This file (`AGENTS.md`) is a short pointer + quick reference for agents that don't read `.github/copilot-instructions.md` by default.
+When an upstream convention conflicts with a confirmed Ieum hardware requirement, follow the Ieum rule while keeping the change as narrow and variant-specific as possible. Never override a safety rule, generated-code restriction, or operator-confirmation requirement.
 
-## Quick command reference
+Before any non-trivial change, read this file completely and then read `.github/copilot-instructions.md` completely.
 
-| Action                           | Command                                                                                                       |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Build a firmware variant         | `pio run -e <env>` (e.g. `pio run -e rak4631`, `pio run -e heltec-v3`)                                        |
-| Build native macOS host binary   | `pio run -e native-macos` (Homebrew prereqs + CH341 LoRa setup in `variants/native/portduino/platformio.ini`) |
-| Clean + rebuild                  | `pio run -e <env> -t clean && pio run -e <env>`                                                               |
-| Flash a device                   | `pio run -e <env> -t upload --upload-port <port>` (or use the `pio_flash` MCP tool)                           |
-| Run firmware unit tests (native) | `pio test -e native`                                                                                          |
-| Run MCP hardware tests           | `./mcp-server/run-tests.sh`                                                                                   |
-| Live TUI test runner             | `mcp-server/.venv/bin/meshtastic-mcp-test-tui`                                                                |
-| Format before commit             | `trunk fmt`                                                                                                   |
-| Regenerate protobuf bindings     | `bin/regen-protos.sh`                                                                                         |
-| Generate CI matrix               | `./bin/generate_ci_matrix.py all [--level pr]`                                                                |
+## Upstream Meshtastic context
 
-## MCP server (device + test automation)
+This repository is a fork of the official Meshtastic firmware, a C++17 embedded project supporting nRF52, ESP32, RP2040, STM32WL, and Portduino devices. The upstream firmware already provides the mesh protocol, SX1262 radio stack, BLE, USB, GNSS framework, telemetry framework, InkHUD, power state handling, and PlatformIO build system.
 
-The `mcp-server/` package exposes ~32 MCP tools for device discovery, building, flashing, serial monitoring, and live-node administration. Tools are grouped as:
+The original detailed agent guidance remains canonical for shared Meshtastic behavior in `.github/copilot-instructions.md`. In particular, retain its rules for formatting, thread safety, module patterns, test execution, hardware-tool safety, and generated protobuf files. This `AGENTS.md` intentionally summarizes only the upstream rules most relevant to Ieum and gives Ieum development policy higher priority.
 
-- **Discovery**: `list_devices`, `list_boards`, `get_board`
-- **Build & flash**: `build`, `clean`, `pio_flash`, `erase_and_flash` (ESP32 factory), `update_flash` (ESP32 OTA), `touch_1200bps`
-- **Serial sessions**: `serial_open`, `serial_read`, `serial_list`, `serial_close`
-- **Device reads**: `device_info`, `list_nodes`
-- **Device writes** (require `confirm=True`): `set_owner`, `get_config`, `set_config`, `get_channel_url`, `set_channel_url`, `send_text`, `reboot`, `shutdown`, `factory_reset`, `set_debug_log_api`
-- **userPrefs admin**: `userprefs_get`, `userprefs_set`, `userprefs_reset`, `userprefs_manifest`, `userprefs_testing_profile`
-- **Vendor escape hatches**: `esptool_*`, `nrfutil_*`, `picotool_*`
+Relevant upstream paths:
 
-Setup: `cd mcp-server && python3 -m venv .venv && .venv/bin/pip install -e '.[test]'`. The repo registers the server via `.mcp.json` — Claude Code picks it up automatically.
+| Path | Purpose |
+| --- | --- |
+| `src/` | Shared firmware implementation |
+| `src/gps/` | GNSS framework and device handling |
+| `src/graphics/niche/InkHUD/` | E-ink user interface |
+| `src/graphics/niche/Drivers/EInk/` | InkHUD panel drivers |
+| `src/modules/Telemetry/Sensor/` | Environmental sensor drivers |
+| `src/motion/` | Motion sensor support |
+| `src/power/` | Power and PMIC support |
+| `src/platform/nrf52/` | Shared nRF52 platform code |
+| `variants/nrf52840/` | nRF52840 board definitions |
+| `src/mesh/generated/` | Generated protobuf code; never edit directly |
 
-See `mcp-server/README.md` for argument shapes and the **MCP Server & Hardware Test Harness** section of `.github/copilot-instructions.md` for agent usage rules (tool surface, fixture contract, firmware integration points, recovery playbooks).
+## Version and branch policy
 
-## Slash commands (AI-assisted workflows)
+- The validated integration branch is `ieum/main`.
+- Its upstream base is official tag `v2.7.26.54e0d8d`, commit `54e0d8d0ab2ff56b3a9ce967e53f79e49af560fb`.
+- `origin` is `wdkdot/ieum-firmware`; `upstream` is `meshtastic/firmware`.
+- Do not merge upstream `develop` directly into `ieum/main` and do not use GitHub's **Sync fork** action.
+- Create focused development branches from `ieum/main`, for example `ieum/board-support`, `ieum/inkhud`, or `ieum/power-control`.
+- Merge only reviewed and hardware-validated work into `ieum/main`.
+- Upgrade only to a selected official release tag on a temporary `ieum/upgrade-v2.x.y` branch.
+- Before an upgrade, run `git merge-base --is-ancestor <current-tag> <new-tag>`.
+- If release histories diverge, preserve `ieum/main`; do not force-push, rewrite shared history, or blindly merge. Create a new tag-based integration branch and port only the Ieum commit set after operator review.
+- Tag validated releases with both product and upstream versions, for example `ieum-v0.1.0-mt2.7.26`.
 
-Three test-and-diagnose workflows exist as slash commands:
+## Confirmed Ieum hardware
 
-- **`/test` (Claude Code) / `/mcp-test` (Copilot)** — run the hardware test suite and interpret failures
-- **`/diagnose` / `/mcp-diagnose`** — read-only device health report
-- **`/repro` / `/mcp-repro`** — flakiness triage: re-run one test N times, diff firmware logs between passes and failures
+| Function | Device | Direction |
+| --- | --- | --- |
+| MCU and LoRa | RAK4630 (`nRF52840` + `SX1262`) | Reuse existing nRF52 and RAK4631 support where electrically compatible |
+| Display | Good Display `GDEY0266T90H`, 2.66-inch, 184 x 360, monochrome, `SSD1685` | Add an InkHUD panel driver |
+| Display load switch | `TPS22919QDCKRQ1` | Power the panel only during display operations |
+| GNSS | `ATGM336H-5NR-32` | Reuse GNSS framework; add Ieum power and UART lifecycle |
+| Temperature/humidity | `AHT20-F` | Reuse the AHT10/AHT20 telemetry driver first |
+| Pressure | `BMP388_TOKMAS` | Reuse the BMP3XX telemetry driver first |
+| Motion | `MMA8652FC` | Add a reusable motion driver |
+| Charger and PMIC | `BQ25628E` | Add conservative, datasheet-verified power support |
 
-Bodies live in `.claude/commands/` and `.github/prompts/` respectively. `.claude/commands/README.md` is the index.
+The final GPIO map, active levels, pull configuration, shared-bus details, and power stabilization delays are not yet authoritative. Never infer them from ESP32 sample code, a similar RAK board, or a generic module datasheet. Verify them against the final Ieum schematic, pin map, component documentation, and real hardware.
 
-## Encryption at a glance
+The hardware and integration documentation under `ieum-docs/` is the current Ieum design source of truth. Keep it synchronized as decisions become verified. Do not commit `.codex/` session metadata unless the operator explicitly requests it.
 
-Two layers, both in `src/mesh/CryptoEngine.cpp`:
+## Implementation boundaries
 
-- **Channel (symmetric)** — **AES-CTR** with a channel-wide PSK (AES-128 or AES-256). Nonce = packet_id ‖ from_node ‖ block_counter. No AEAD; integrity is soft (channel-hash filter). The well-known default PSK lives in `src/mesh/Channels.h`; a 1-byte PSK is a short-form index into it.
-- **Per-peer PKI** — **X25519 ECDH** (Curve25519, 32-byte keys) → SHA-256 → **AES-256-CCM** with an 8-byte MAC. Fresh 32-bit `extraNonce` per packet, sent in the clear alongside the MAC. 12-byte wire overhead (`MESHTASTIC_PKC_OVERHEAD`). Used for DMs. Also used for remote admin (`src/modules/AdminModule.cpp`), where AdminMessage authorization is gated by `config.security.admin_key[0..2]`. Disabled entirely in Ham mode (`user.is_licensed=true`).
+Keep board-specific configuration in:
 
-Key rotation to never trigger casually: only the **full** factory reset (`factory_reset_device`, `eraseBleBonds=true`) wipes `security.private_key` and regenerates the keypair — every peer holds the old public key, so DMs silently fail PKI decrypt until NodeInfo re-exchanges. The **partial** config reset (`factory_reset_config`) preserves the private key and doesn't invalidate peer relationships. Explicitly blanking `security.private_key` via admin also triggers regen. See the **Encryption & Key Management** section of `.github/copilot-instructions.md` for the full spec (nonce layout, send/receive selection logic including infrastructure-portnum exceptions, admin-key + session-passkey authorization, `is_managed` scope, key-rotation hazards).
+```text
+variants/nrf52840/ieum/
+├── platformio.ini
+├── variant.h
+├── variant.cpp
+└── nicheGraphics.h
+```
 
-## House rules
+Define the dedicated PlatformIO environment as `ieum`. Reuse the RAK4631/nRF52840 board configuration only where the RAK4630 wiring and memory layout are confirmed compatible.
 
-- **No destructive device operations without operator approval.** `factory_reset`, `erase_and_flash`, `reboot`, `shutdown`, history-rewriting git ops — describe the action and stop. Operator authorizes.
-- **One MCP call per serial port at a time.** The port lock is exclusive; concurrent calls deadlock. Sequence: open → read/mutate → close, then next device.
-- **`userPrefs.jsonc` is session state during tests.** The `_session_userprefs` fixture snapshots + restores it; never edit it from inside a test.
-- **Don't speculate about firmware root causes.** When evidence doesn't support a classification, say "unknown" and list what would disambiguate.
-- **Run `trunk fmt` before proposing a commit.** The `trunk_check` CI gate will reject unformatted code.
-- **`confirm=True` on destructive MCP tools is a real gate, not a formality.** Don't bypass it via auto-approve settings.
-- **Keep code comments minimal — one or two lines, max.** Comment only when the _why_ isn't obvious from the code; never restate what the next line does. No multi-paragraph block comments explaining straightforward changes. The diff and commit message carry the rationale; the code carries the behavior.
-- **Use `Throttle` for time-based rate limiting, not raw `millis()` math.** `src/mesh/Throttle.h` provides `Throttle::isWithinTimespanMs(lastMs, intervalMs)` (returns true while inside the cooldown) and `Throttle::execute(&lastMs, intervalMs, func)` (function-pointer form that updates the timestamp on fire). Use these for any "did N ms pass since X" check — raw `millis() > lastMs + N` is rollover-unsafe (breaks after ~49.7 days) and inconsistent with the rest of the codebase. The helpers compute `now - lastMs` with unsigned subtraction, which wraps correctly.
+Expected reusable driver additions:
 
-## Typical agent workflows
+```text
+src/motion/MMA8652FCSensor.*
+src/power/BQ25628E.*
+src/graphics/niche/Drivers/EInk/GDEY0266T90H.*
+```
 
-### Flashing a device
+Prefer existing variant hooks such as `earlyInitVariant()`, `variant_shutdown()`, and `variant_nrf52LoopHook()` over changes to shared startup code.
 
-1. `list_devices` → find the port + likely VID
-2. `list_boards` → confirm the env, or use the known default for the hardware
-3. `pio_flash(env=..., port=..., confirm=True)` for any arch, or `erase_and_flash(env=..., port=..., confirm=True)` for an ESP32 factory install
+During initial board support, avoid modifying these areas unless evidence proves a shared integration point is required:
 
-### Inspecting live node state
+- `src/main.cpp`
+- `src/platform/nrf52/main-nrf52.cpp`
+- `src/mesh/Router.*`
+- `src/mesh/NodeDB.*`
+- protobuf definitions and generated bindings
 
-1. `device_info(port=...)` — short summary (node num, firmware version, region, peer count)
-2. `list_nodes(port=...)` — full peer table (SNR, RSSI, pubkey presence, last_heard)
-3. `get_config(section="lora", port=...)` — LoRa settings for cross-device comparison
+Reuse upstream LoRa, BLE, USB, routing, NodeDB, GNSS, telemetry, and InkHUD behavior. Keep Ieum conditionals near hardware boundaries instead of spreading `#ifdef IEUM` throughout shared logic.
 
-Sequence these; don't parallelize on the same port.
+## Power sequencing and backfeed prevention
 
-### Testing a firmware change
+- Configure GNSS and E-ink power controls to their verified inactive states during early boot, before peripheral initialization.
+- Treat power switching as a peripheral lifecycle operation, not a single GPIO write.
+- Use bounded waits and explicit failure states. A failed peripheral must not prevent LoRa, BLE, USB, or SWD recovery.
 
-1. Build locally: `pio run -e <env>`
-2. Flash the test device: `pio_flash(env=..., port=..., confirm=True)`
-3. Run the suite: `./mcp-server/run-tests.sh tests/<tier>` or `/test tests/<tier>`
-4. On failure, open `mcp-server/tests/report.html` → `Meshtastic debug` section for the firmware log tail + device state dump
-5. Iterate
+GNSS shutdown sequence:
 
-### Debugging a flaky test
+1. Stop GNSS parsing and new UART transactions.
+2. Allow an active transmission to finish when required.
+3. Disable or detach the UART peripheral.
+4. Put MCU UART RX/TX pins into the board-verified high-impedance, non-backfeeding state with no unverified pulls.
+5. Disable GNSS main power.
+6. Preserve the separate GNSS VBAT backup domain unless performing an operator-requested cold-start test.
 
-1. `/repro <test-node-id> [count]` — re-runs the test N times, diffs firmware logs between passes and failures
-2. If the first attempt always fails and the rest pass, that's a state-leak pattern → suggest `--force-bake` or a clean device state, don't chase the first failure
-3. If all N fail, this isn't a flake — it's a regression. Stop iterating and escalate to `/test` for full-suite context.
+GNSS startup reverses this safely: enable main power, wait the verified stabilization time, restore UART pin mux and configuration, and only then resume communication.
 
-## Where to look
+E-ink shutdown sequence:
 
-| Path                              | What's there                                                                                                             |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `src/`                            | Firmware C++ source (`mesh/`, `modules/`, `platform/`, `graphics/`, `gps/`, `motion/`, `mqtt/`, …)                       |
-| `src/mesh/`                       | Core: NodeDB, Router, Channels, CryptoEngine, radio interfaces, StreamAPI, PhoneAPI                                      |
-| `src/modules/`                    | Feature modules; `Telemetry/Sensor/` has 50+ I2C sensor drivers                                                          |
-| `variants/`                       | 200+ hardware variant definitions (`variant.h` + `platformio.ini` per board)                                             |
-| `protobufs/`                      | `.proto` definitions; regenerate with `bin/regen-protos.sh`                                                              |
-| `test/`                           | Firmware unit tests (12 suites; `pio test -e native`)                                                                    |
-| `mcp-server/`                     | Python MCP server + pytest hardware integration tests                                                                    |
-| `mcp-server/tests/`               | Tiered pytest suite: `unit/`, `mesh/`, `telemetry/`, `monitor/`, `recovery/`, `ui/`, `fleet/`, `admin/`, `provisioning/` |
-| `.claude/commands/`               | Claude Code slash command bodies                                                                                         |
-| `.github/prompts/`                | Copilot prompt bodies (mirrors of the Claude Code ones)                                                                  |
-| `.github/copilot-instructions.md` | **Primary agent instructions — read this**                                                                               |
-| `.github/workflows/`              | CI pipelines                                                                                                             |
-| `.mcp.json`                       | MCP server registration for Claude Code                                                                                  |
+1. Complete the refresh and wait for BUSY with a timeout.
+2. Put SSD1685 into deep sleep.
+3. Move SPI and control pins into the board-verified non-backfeeding state.
+4. Disable the TPS22919 display rail.
 
-## Recovery one-liners
+Do not power off the panel immediately after sending a refresh command. Do not continue partial refreshes indefinitely; use periodic full refresh according to measured panel behavior and manufacturer guidance.
 
-- **`userPrefs.jsonc` dirty after a test run?** Re-run `./mcp-server/run-tests.sh` once (pre-flight self-heals from the sidecar). If still dirty: `git checkout userPrefs.jsonc`.
-- **nRF52 not responding?** `mcp__meshtastic__touch_1200bps(port=...)` drops it into the DFU bootloader, then `pio_flash` re-installs.
-- **Device fully wedged (no DFU)?** `mcp__meshtastic__uhubctl_cycle(role="nrf52", confirm=True)` hard-power-cycles it via USB hub PPPS. Needs `uhubctl` installed (`brew install uhubctl` / `apt install uhubctl`); on Linux without udev rules, permission errors fail fast, so use `sudo uhubctl` yourself or configure udev access.
-- **Port busy?** `lsof <port>` to find the holder. Usually a stale `pio device monitor` or zombie `meshtastic_mcp` process. Kill it.
-- **Multiple MCP servers running?** `ps aux | grep meshtastic_mcp` — zombies hold ports. Kill all but the one your host spawned.
-- **macOS: `LIBUSB_ERROR_BUSY` on a CH341 LoRa adapter?** A third-party WCH `CH34xVCPDriver` is claiming interface 0. Find the bundle ID with `ioreg -p IOUSB -l -w 0 | grep -B2 -A30 0x5512`, then `sudo kmutil unload -b <bundleID>`. Apple's bundled CH34x kext targets the CH340 UART (PID 0x7523), not the SPI bridge — it's never the culprit.
+## Development order
 
-## Environment variables (test harness)
+1. Create the Ieum variant and prove SWD and USB recovery.
+2. Verify RAK4630 LoRa transmit/receive and BLE connectivity.
+3. Scan I2C and identify every fitted device before enabling higher-level drivers.
+4. Reuse and validate AHT20 and BMP388 telemetry.
+5. Validate ATGM336H GNSS, fix timeout, main-power switching, UART isolation, and off-state backfeed current.
+6. Add MMA8652FC sampling and motion interrupts.
+7. Add BQ25628E identification and status reporting, followed by conservative charging controls.
+8. Add GDEY0266T90H InkHUD full refresh.
+9. Add E-ink deep sleep and load-switch control, then fast or partial refresh if safely supported.
+10. Add motion-aware GNSS scheduling only after GNSS and motion sensing are independently stable.
+11. Run integrated stability and power measurements for at least 24 hours.
 
-| Var                                  | Purpose                                                                                                                                                                                                    |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MESHTASTIC_MCP_ENV_<ROLE>`          | Override PlatformIO env for a role (e.g. `MESHTASTIC_MCP_ENV_NRF52=rak4631-dap`). Default map: `nrf52→rak4631`, `esp32s3→heltec-v3`.                                                                       |
-| `MESHTASTIC_MCP_SEED`                | PSK seed for the session test profile. Defaults to `mcp-<user>-<host>`.                                                                                                                                    |
-| `MESHTASTIC_MCP_FLASH_LOG`           | File path to tee pio/esptool/nrfutil/picotool output. `run-tests.sh` sets this to `tests/flash.log` so the TUI can stream live flash progress.                                                             |
-| `MESHTASTIC_MCP_TCP_HOST`            | `host` or `host:port` of a `meshtasticd` daemon (e.g. the `native-macos` build). Surfaces it in `list_devices` as `tcp://host:port` so `connect()`-based tools target it transparently. Default port 4403. |
-| `MESHTASTIC_UHUBCTL_BIN`             | Absolute path to `uhubctl` binary. Default: PATH lookup.                                                                                                                                                   |
-| `MESHTASTIC_UHUBCTL_LOCATION_<ROLE>` | Pin a role to a specific uhubctl hub location (e.g. `1-1.3`). Wins over VID auto-detection — use when multiple devices share a VID.                                                                        |
-| `MESHTASTIC_UHUBCTL_PORT_<ROLE>`     | Pin a role to a specific hub port number. Required alongside `LOCATION_<ROLE>`.                                                                                                                            |
-| `MESHTASTIC_UI_CAMERA_BACKEND`       | Camera backend for UI tier + `capture_screen` tool: `opencv` / `ffmpeg` / `null` / `auto` (default).                                                                                                       |
-| `MESHTASTIC_UI_CAMERA_DEVICE`        | Generic camera device (index or path). Used by the UI tier when no per-role var is set.                                                                                                                    |
-| `MESHTASTIC_UI_CAMERA_DEVICE_<ROLE>` | Per-role camera pinning (e.g. `MESHTASTIC_UI_CAMERA_DEVICE_ESP32S3=0` for the OLED-bearing heltec-v3).                                                                                                     |
-| `MESHTASTIC_UI_OCR_BACKEND`          | OCR engine selection: `easyocr` / `pytesseract` / `null` / `auto` (default).                                                                                                                               |
-| `MESHTASTIC_UI_TUI_CAMERA`           | Set to `1` to mount the live camera-feed panel in `meshtastic-mcp-test-tui`.                                                                                                                               |
+At every stage, verify that LoRa, BLE, USB recovery, reboot, and configuration persistence still work.
+
+## Coding, safety, and verification rules
+
+- Follow existing C++17 conventions and nearby subsystem patterns.
+- Use Meshtastic logging macros from `src/DebugConfiguration.h`.
+- Keep comments short and explain only non-obvious reasons.
+- Use `Throttle` helpers for elapsed-time checks instead of rollover-unsafe raw `millis()` comparisons.
+- Use concurrency primitives already established by the subsystem; do not introduce unsynchronized peripheral access.
+- Never edit `src/mesh/generated/**`.
+- Run `trunk fmt` before proposing a commit.
+- Build the board with `pio run -e ieum` once the environment exists.
+- Run relevant native tests for shared logic changes.
+- Record which real hardware checks were performed; successful compilation alone is not hardware verification.
+- Do not flash, erase, reboot, shut down, change regulatory region, factory-reset hardware, or rewrite Git history without explicit operator approval.
+- Only one serial or hardware-tool operation may own a device port at a time.
+- Do not speculate about root causes. Report `unknown` and state what measurement would disambiguate when evidence is insufficient.
+
+## Quick commands
+
+```bash
+pio run -e ieum
+pio run -e ieum -t clean
+trunk fmt
+./bin/run-tests.sh
+git fetch upstream --tags
+```
+
+Use the test command available in this pinned upstream tag. If repository test infrastructure differs from newer upstream documentation, inspect the checked-out scripts rather than assuming the latest `develop` workflow applies.
