@@ -79,6 +79,20 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - InkHUD applet 구성
 - TPS22919 전원 제어와 패널 갱신 수명주기 연결
 
+### 현재 구현 상태
+
+2026-07-13 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
+
+- RAK4630 내부 SX1262 연결, 센서 I²C, GNSS·보조 UART, E-ink SPI와 확인된 보드 GPIO 번호를 정의했다.
+- P0.09와 P0.10을 일반 GPIO로 사용할 수 있도록 nRF52 NFC 핀 설정을 빌드에 반영했다.
+- 개인 소장용 노드이므로 정식 HardwareModel을 요청하지 않고 `PRIVATE_HW`로 식별한다.
+- GNSS EN 활성 레벨이 확정되지 않아 `HAS_GPS=0`으로 두고 GNSS 전원 제어를 활성화하지 않았다.
+- SSD1685 드라이버와 E-ink EN/BUSY 활성 레벨이 확정되지 않아 `HAS_SCREEN=0`과 `MESHTASTIC_USE_EINK_UI=0`으로 두었다.
+- LED와 버튼은 GPIO 번호만 보드 전용 상수로 정의하고, 활성 레벨과 pull이 확인될 때까지 공통 기능 매크로에 연결하지 않았다.
+- 부팅과 종료 시 GNSS와 E-ink 관련 MCU 핀은 pull 없는 기본 입력 상태로 둔다. 이 설정만으로 외부 회로의 EN 비활성을 보장하지는 않으므로 실물에서 외부 pull과 전원 상태를 확인해야 한다.
+
+빌드 성공은 부트로더 호환성, USB 복구, LoRa RF 동작 또는 전원 안전성을 검증하지 않는다. `wiscore_rak4631` 보드 설정 재사용은 실물 SWD·USB bring-up에서 확인해야 한다.
+
 ## 부품별 적용 방침
 
 | 부품 | 현재 지원 | 적용 방침 |
@@ -207,7 +221,7 @@ Ieum 전용 `#ifdef`를 `GPS.cpp` 여러 위치에 넣기보다 motion 상태를
 - `src/mesh/NodeDB.*`
 - `src/mesh/generated/**`
 
-`src/mesh/generated/`는 생성 파일이므로 직접 수정하지 않는다. Meshtastic 앱과 protobuf에 정식 `IEUM` 하드웨어 모델을 표시하는 작업은 보드 bring-up과 분리하고 protobufs upstream 절차로 진행한다.
+`src/mesh/generated/`는 생성 파일이므로 직접 수정하지 않는다. Ieum은 개인 소장용 노드로 유지하며 Meshtastic 앱이나 protobuf에 정식 `IEUM` 하드웨어 모델을 추가하지 않는다.
 
 ## 구현 전 확정할 자료
 
