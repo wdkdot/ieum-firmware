@@ -211,11 +211,11 @@ int32_t MMA8652FCSensor::runOnce()
         mma8652fcInterrupt = false;
         uint8_t interruptSource = 0;
         uint8_t motionSource = 0;
-        if (!readRegister(REG_INT_SOURCE, interruptSource) ||
-            ((interruptSource & INT_SOURCE_FF_MT) != 0U && !readRegister(REG_FF_MT_SRC, motionSource))) {
+        if (!readRegister(REG_INT_SOURCE, interruptSource) || !readRegister(REG_FF_MT_SRC, motionSource)) {
             return handleError();
         }
-        motionDetected = (motionSource & FF_MT_EVENT_ACTIVE) != 0U;
+        motionDetected = ((interruptSource & INT_SOURCE_FF_MT) != 0U) &&
+                         ((motionSource & FF_MT_EVENT_ACTIVE) != 0U);
     }
 #else
     uint8_t motionSource = 0;
