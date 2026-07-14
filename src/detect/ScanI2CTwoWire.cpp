@@ -646,7 +646,21 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
                 SCAN_SIMPLE_CASE(MLX90632_ADDR, MLX90632, "MLX90632", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(NAU7802_ADDR, NAU7802, "NAU7802", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(MAX1704X_ADDR, MAX17048, "MAX17048", (uint8_t)addr.address);
-                SCAN_SIMPLE_CASE(DFROBOT_RAIN_ADDR, DFROBOT_RAIN, "DFRobot Rain Gauge", (uint8_t)addr.address);
+            case DFROBOT_RAIN_ADDR:
+#ifdef HAS_MMA8652FC
+                registerValue = getRegisterValue(ScanI2CTwoWire::RegisterLocation(addr, MMA8652FC_WHO_AM_I_REG), 1);
+                if (registerValue == MMA8652FC_WHO_AM_I_VALUE) {
+                    type = MMA8652FC;
+                    logFoundDevice("MMA8652FC", (uint8_t)addr.address);
+                } else {
+                    type = DFROBOT_RAIN;
+                    logFoundDevice("DFRobot Rain Gauge", (uint8_t)addr.address);
+                }
+#else
+                type = DFROBOT_RAIN;
+                logFoundDevice("DFRobot Rain Gauge", (uint8_t)addr.address);
+#endif
+                break;
                 SCAN_SIMPLE_CASE(LTR390UV_ADDR, LTR390UV, "LTR390UV", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(PCT2075_ADDR, PCT2075, "PCT2075", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(SCD30_ADDR, SCD30, "SCD30", (uint8_t)addr.address);

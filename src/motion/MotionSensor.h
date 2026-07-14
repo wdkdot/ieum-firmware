@@ -3,6 +3,7 @@
 #define _MOTION_SENSOR_H_
 
 #define MOTION_SENSOR_CHECK_INTERVAL_MS 50
+#define MOTION_SENSOR_RETRY_INTERVAL_MS 5000
 #define MOTION_SENSOR_CLICK_THRESHOLD 40
 
 #include "../configuration.h"

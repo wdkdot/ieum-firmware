@@ -280,6 +280,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // ACCELEROMETER
 // -----------------------------------------------------------------------------
 #define MPU6050_ADDR 0x68
+#define MMA8652FC_ADDR 0x1D
+#define MMA8652FC_WHO_AM_I_REG 0x0D
+#define MMA8652FC_WHO_AM_I_VALUE 0x4A
 #define STK8BXX_ADDR 0x18
 #define LIS3DH_ADDR 0x18
 #define LIS3DH_ADDR_ALT 0x19
