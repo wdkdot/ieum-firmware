@@ -28,8 +28,18 @@ extern "C" {
 #define NUM_ANALOG_INPUTS (0)
 #define NUM_ANALOG_OUTPUTS (0)
 
-// Required by the Arduino core. No LED pin is exposed until its polarity is verified.
+// LEDs
+#define PIN_LED1 (21) // P0.21, LED 1
+#define PIN_LED2 (35) // P1.03, LED 2
 #define LED_STATE_ON 1
+
+// Buttons use board-level pull-ups and are active low when pressed.
+#define PIN_BUTTON1 (33) // P1.01
+#define PIN_BUTTON2 (34) // P1.02
+#define BUTTON_ACTIVE_LOW true
+#define BUTTON_ACTIVE_PULLUP false
+#define ALT_BUTTON_ACTIVE_LOW true
+#define ALT_BUTTON_ACTIVE_PULLUP false
 
 // Sensor I2C bus
 #define WIRE_INTERFACES_COUNT 1
@@ -41,6 +51,11 @@ extern "C" {
 #define PIN_SERIAL1_TX (16) // P0.16, GNSS_RX
 #define PIN_SERIAL2_RX (19) // P0.19, UART1_RX
 #define PIN_SERIAL2_TX (20) // P0.20, UART1_TX
+
+#define GPS_RX_PIN PIN_SERIAL1_RX
+#define GPS_TX_PIN PIN_SERIAL1_TX
+#define PIN_GPS_EN (17) // P0.17
+#define GPS_EN_ACTIVE HIGH
 
 // SPI0 is internal to the RAK4630 SX1262. SPI1 is wired to the E-ink panel.
 #define SPI_INTERFACES_COUNT 2
@@ -66,11 +81,10 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define SX126X_DIO2_AS_RF_SWITCH
 #define SX126X_DIO3_TCXO_VOLTAGE 1.8
 
-// Confirmed Ieum PCB connections. Polarity-dependent feature macros remain
-// disabled until the schematic and hardware measurements establish polarity.
-#define IEUM_GNSS_RX_PIN PIN_SERIAL1_RX
-#define IEUM_GNSS_TX_PIN PIN_SERIAL1_TX
-#define IEUM_GNSS_EN_PIN (17) // P0.17
+// Confirmed Ieum PCB connections
+#define IEUM_GNSS_RX_PIN GPS_RX_PIN
+#define IEUM_GNSS_TX_PIN GPS_TX_PIN
+#define IEUM_GNSS_EN_PIN PIN_GPS_EN
 
 #define PIN_EINK_SCLK PIN_SPI1_SCK
 #define PIN_EINK_MOSI PIN_SPI1_MOSI
@@ -78,14 +92,17 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define PIN_EINK_DC (29)   // P0.29
 #define PIN_EINK_RES (28)  // P0.28
 #define PIN_EINK_BUSY (2)  // P0.02
-#define IEUM_EINK_EN_PIN (10) // P0.10
+#define PIN_EINK_EN (10)   // P0.10, active high
+#define IEUM_EINK_EN_PIN PIN_EINK_EN
 
 #define IEUM_MOTION_INT_PIN (9) // P0.09
-#define IEUM_PMIC_INT_PIN (5)   // P0.05
-#define IEUM_BUTTON1_PIN (33)    // P1.01
-#define IEUM_BUTTON2_PIN (34)    // P1.02
-#define IEUM_LED1_PIN (21)       // P0.21
-#define IEUM_LED2_PIN (35)       // P1.03
+#define IEUM_PMIC_INT_PIN (5)   // P0.05, open-drain active-low pulse
+#define IEUM_PMIC_INT_ACTIVE LOW
+#define IEUM_PMIC_INT_PULSE_US 256
+#define IEUM_BUTTON1_PIN PIN_BUTTON1
+#define IEUM_BUTTON2_PIN PIN_BUTTON2
+#define IEUM_LED1_PIN PIN_LED1
+#define IEUM_LED2_PIN PIN_LED2
 
 // Use native USB VBUS detection for the initial board-support build.
 #define NRF_APM

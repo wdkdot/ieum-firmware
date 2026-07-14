@@ -16,6 +16,10 @@
 - [NXP MMA8652FC Datasheet, Rev. 3.3](https://www.nxp.com/docs/en/data-sheet/MMA8652FC.pdf)
 - [NXP MMA8653FC Datasheet, 비교용](https://www.nxp.com/docs/en/data-sheet/MMA8653FC.pdf)
 
+## 전원
+
+- [Texas Instruments BQ25628E Datasheet, SLUSFA4C, revised February 2025](https://www.ti.com/lit/ds/symlink/bq25628e.pdf)
+
 ## 디스플레이
 
 - [Good Display GDEY0266T90H 제품 페이지 및 다운로드](https://www.good-display.com/product/501.html)
@@ -29,7 +33,6 @@
 
 ## 원문 추가가 필요한 부품
 
-- Texas Instruments BQ25628E
 - Texas Instruments TPS22919-Q1
 - SGMicro SGM6036-3.3
 - H5VU25UC

@@ -19,24 +19,44 @@ const uint32_t g_ADigitalPinMap[] = {
     // P1
     32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
 
-static void parkUnpoweredPeripheralPins()
+static void setSwitchedPeripheralsOff()
 {
-    const uint32_t pins[] = {IEUM_GNSS_RX_PIN, IEUM_GNSS_TX_PIN, IEUM_GNSS_EN_PIN, PIN_EINK_SCLK, PIN_EINK_MOSI,
-                             PIN_EINK_CS,      PIN_EINK_DC,      PIN_EINK_RES,     PIN_EINK_BUSY, IEUM_EINK_EN_PIN};
+    const uint32_t pins[] = {IEUM_GNSS_RX_PIN, IEUM_GNSS_TX_PIN, PIN_EINK_SCLK, PIN_EINK_MOSI,
+                             PIN_EINK_CS,      PIN_EINK_DC,      PIN_EINK_RES,  PIN_EINK_BUSY};
 
     for (const uint32_t pin : pins) {
         nrf_gpio_cfg_default(pin);
     }
+
+    nrf_gpio_cfg_output(IEUM_GNSS_EN_PIN);
+    nrf_gpio_pin_clear(IEUM_GNSS_EN_PIN);
+    nrf_gpio_cfg_output(IEUM_EINK_EN_PIN);
+    nrf_gpio_pin_clear(IEUM_EINK_EN_PIN);
+}
+
+static void setLedsOff()
+{
+    nrf_gpio_cfg_output(PIN_LED1);
+    nrf_gpio_pin_clear(PIN_LED1);
+    nrf_gpio_cfg_output(PIN_LED2);
+    nrf_gpio_pin_clear(PIN_LED2);
 }
 
 void earlyInitVariant()
 {
-    parkUnpoweredPeripheralPins();
+    setSwitchedPeripheralsOff();
+    setLedsOff();
 }
 
-void initVariant() {}
+void initVariant()
+{
+    nrf_gpio_cfg_input(PIN_BUTTON1, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(PIN_BUTTON2, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(IEUM_PMIC_INT_PIN, NRF_GPIO_PIN_NOPULL);
+}
 
 void variant_shutdown()
 {
-    parkUnpoweredPeripheralPins();
+    setSwitchedPeripheralsOff();
+    setLedsOff();
 }
