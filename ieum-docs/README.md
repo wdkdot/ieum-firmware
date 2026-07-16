@@ -24,6 +24,7 @@ Ieum은 RAK4630을 중심으로 제작한 휴대용 Meshtastic 노드다. LoRa �
 - [USB, 보호 회로 및 디버깅](usb-and-debug.md)
 - [펌웨어 구조와 동작 정책](firmware-architecture.md)
 - [Meshtastic 펌웨어 적용 계획](firmware-integration-plan.md)
+- [펌웨어 MVP](mvp.md)
 - [전력 운용 계획](power-budget.md)
 - [초기 구동 및 검사 절차](bring-up-guide.md)
 - [자료 출처](references.md)
