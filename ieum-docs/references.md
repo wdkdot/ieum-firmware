@@ -23,9 +23,11 @@
 ## 디스플레이
 
 - [Good Display GDEY0266T90H 제품 페이지 및 다운로드](https://www.good-display.com/product/501.html)
-- [Good Display GDEY0266T90H ESP32 Sample Code](https://www.good-display.com/companyfile/1292.html)
+- [Good Display GDEY0266T90H Specification](https://www.good-display.com/companyfile/1291.html)
+- [Good Display GDEY0266T90H Arduino Sample Code](https://www.good-display.com/companyfile/1295.html)
+- [Good Display SSD1685 자료 페이지](https://www.good-display.com/companyfile/1443.html)
 
-제품 페이지에서 최신 `GDEY0266T90H Specification`, SSD1685 자료와 제조사 샘플 코드를 내려받아 사용한다. Ieum에 사용하는 패널은 2.66인치, 184×360, 흑백, SSD1685 사양이다.
+GDEY0266T90H 사양서와 2023-09-15 Arduino 예제를 기준으로 해상도, 인터페이스 극성, RAM 방향, 전체·빠른·부분 갱신과 deep sleep 시퀀스를 구현했다. Ieum에 사용하는 패널은 2.66인치, 184×360, 흑백, SSD1685 사양이다.
 
 ## GNSS
 

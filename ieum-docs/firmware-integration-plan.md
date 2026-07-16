@@ -81,14 +81,17 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 
 ### 현재 구현 상태
 
-2026-07-13 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
+2026-07-16 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경에 InkHUD와 GDEY0266T90H 지원을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
 
 - RAK4630 내부 SX1262 연결, 센서 I²C, GNSS·보조 UART, E-ink SPI와 확인된 보드 GPIO 번호를 정의했다.
 - P0.09와 P0.10을 일반 GPIO로 사용할 수 있도록 nRF52 NFC 핀 설정을 빌드에 반영했다.
 - 개인 소장용 노드이므로 정식 HardwareModel을 요청하지 않고 `PRIVATE_HW`로 식별한다.
 - GNSS EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 전원 안정화 시간이 미확정이므로 `HAS_GPS=0`은 유지한다.
-- E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. SSD1685 드라이버와 BUSY 동작이 미확정이므로 `HAS_SCREEN=0`과 `MESHTASTIC_USE_EINK_UI=0`은 유지한다.
-- 두 사용자 버튼은 외부 pull-up을 사용하며 active low로 공통 입력 기능에 연결했다.
+- E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 공식 패널 자료에 따라 BUSY active high, RESET과 CS active low인 SSD1685 드라이버를 연결하고 InkHUD 빌드를 활성화했다.
+- 전체 갱신은 공식 `0xF4` 시퀀스, 빠른 갱신은 공식 1.5초 `0xC7` 시퀀스를 사용한다. 부분 갱신 `0x1C`도 구현했지만 실물 검증 전까지 variant 설정에서 비활성화한다.
+- 화면 갱신 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. BUSY timeout에도 명령 전송 없이 같은 전원 차단 경로를 사용한다.
+- 기본 UI는 184×360 세로 방향과 단일 InkHUD tile이다. 조립 방향이 반대이면 variant의 회전 기본값만 0에서 2로 변경한다.
+- 두 사용자 버튼은 외부 pull-up active low로 정의했다. InkHUD의 `prepareIeumButtons()`가 두 핀과 timing을 한곳에 모으지만, 역할 확정 전에는 handler 등록과 interrupt 시작을 하지 않는다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
 - MMA8652FC INT1은 P0.09에 직결하며 push-pull active high, latched interrupt로 설정했다. MCU 입력은 no-pull과 rising edge를 사용한다.
 - BQ25628E `INT`는 외부 pull-up된 open-drain active-low 256 µs pulse 입력으로 정의했다. TI 권장 pull-up은 10 kΩ이며, ISR은 I²C를 사용하지 않고 전원 thread의 flag/status poll만 예약한다.
@@ -98,17 +101,17 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 
 ## 부품별 적용 방침
 
-| 부품                   | 현재 지원      | 적용 방침                                                                               |
-| ---------------------- | -------------- | --------------------------------------------------------------------------------------- |
-| RAK4630 / nRF52840     | 지원됨         | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성                        |
-| SX1262                 | 지원됨         | RAK4630 내부 연결과 RF switch/TCXO 설정 확인                                            |
-| AHT20-F                | 지원됨         | 기존 AHT10/AHT20 환경 센서 드라이버 재사용                                              |
-| BMP388_TOKMAS          | 지원됨         | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토                            |
-| ATGM336H-5NR-32        | 지원됨         | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결                                        |
-| MMA8652FC              | 초기 지원      | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ                     |
-| BQ25628E               | 초기 지원      | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
-| GDEY0266T90H / SSD1685 | 직접 지원 없음 | InkHUD용 패널 드라이버 추가                                                             |
-| TPS22919-Q1            | GPIO 제어 가능 | E-ink 갱신 수명주기에 맞춰 전원 ON/OFF                                                  |
+| 부품                   | 현재 지원 | 적용 방침                                                                               |
+| ---------------------- | --------- | --------------------------------------------------------------------------------------- |
+| RAK4630 / nRF52840     | 지원됨    | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성                        |
+| SX1262                 | 지원됨    | RAK4630 내부 연결과 RF switch/TCXO 설정 확인                                            |
+| AHT20-F                | 지원됨    | 기존 AHT10/AHT20 환경 센서 드라이버 재사용                                              |
+| BMP388_TOKMAS          | 지원됨    | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토                            |
+| ATGM336H-5NR-32        | 지원됨    | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결                                        |
+| MMA8652FC              | 초기 지원 | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ                     |
+| BQ25628E               | 초기 지원 | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
+| GDEY0266T90H / SSD1685 | 초기 지원 | InkHUD 전체 갱신과 공식 빠른 갱신, opt-in 부분 갱신; 실물 검증 필요                     |
+| TPS22919-Q1            | 초기 지원 | 갱신별 ON/OFF, deep sleep과 high-Z 수명주기; 역급전 전류 실측 필요                      |
 
 ## 기존 지원을 재사용하는 부품
 
@@ -137,7 +140,7 @@ Ieum은 1분 간격 측정이므로 후속 단계에서 forced mode 단발 측�
 
 ### MMA8652FC
 
-예상 추가 파일:
+추가 파일:
 
 ```text
 src/motion/MMA8652FCSensor.h
@@ -191,21 +194,20 @@ src/graphics/niche/Drivers/EInk/GDEY0266T90H.cpp
 variants/nrf52840/ieum/nicheGraphics.h
 ```
 
-`src/graphics/niche/Drivers/EInk/SSD16XX.*`와 `SSD1682.*` 구조를 우선 검토하되 SSD1685 초기화 명령, RAM 방향, LUT와 해상도는 제조사 자료로 확인한다.
+`src/graphics/niche/Drivers/EInk/SSD16XX.*` 구조를 재사용하고, SSD1685 초기화 명령, RAM 방향, 해상도와 update control 값은 Good Display 공식 패널 사양과 Arduino 예제로 확인했다.
 
 화면 갱신 순서:
 
 1. TPS22919 E-ink 전원을 켠다.
-2. 전원 안정화 시간을 기다린다.
-3. 패널 reset과 SSD1685 초기화를 수행한다.
-4. InkHUD의 1비트 프레임을 전송한다.
-5. 전체, 빠른 또는 부분 갱신을 시작한다.
-6. timeout을 두고 BUSY 해제를 기다린다.
-7. 패널을 deep sleep으로 전환한다.
-8. SPI와 제어 핀을 역급전 방지 상태로 전환한다.
-9. TPS22919를 끈다.
+2. 패널 reset과 SSD1685 초기화를 수행한다. 별도 전원 안정화 시간은 실측 후 추가한다.
+3. InkHUD의 1비트 프레임을 전송한다.
+4. 전체, 빠른 또는 부분 갱신을 시작한다.
+5. timeout을 두고 BUSY 해제를 기다린다.
+6. 패널을 deep sleep으로 전환한다.
+7. SPI와 제어 핀을 역급전 방지 상태로 전환한다.
+8. TPS22919를 끈다.
 
-부분 갱신만 계속 반복하지 않고 실물의 잔상 특성에 따라 주기적으로 전체 갱신한다.
+현재 전체 갱신은 `0x22=0xF4`, 빠른 갱신은 공식 1.5초 설정과 `0x22=0xC7`을 사용한다. 전체 화면 부분 갱신은 이전 프레임을 MCU에 보존해 `0x26` base plane을 복원하고 `0x22=0x1C`를 사용하지만, 전원 차단 뒤의 영상 품질을 검증하기 전까지 기본 설정에서는 사용하지 않는다. InkHUD display resilience 초기값은 FAST 5회당 FULL 1회다.
 
 ## 움직임 기반 GNSS 정책
 
@@ -236,7 +238,8 @@ Ieum 전용 `#ifdef`를 `GPS.cpp` 여러 위치에 넣기보다 motion 상태를
 - I²C SDA/SCL 핀
 - AHT20, BMP388와 BQ25628E의 주소 선택 상태
 - GNSS 전원 안정화 시간과 UART off-state
-- E-ink CS/DC/RESET/BUSY 동작과 전원 안정화 시간
+- E-ink 전원 안정화 시간과 PCB에서의 off-state 역급전 전류
+- E-ink 실제 조립 방향, 빠른/부분 갱신의 잔상과 온도별 BUSY 시간
 - 버튼 2개의 최종 펌웨어 역할
 - LED 2개의 최종 펌웨어 역할
 - E-ink와 LoRa의 SPI bus 공유 여부
