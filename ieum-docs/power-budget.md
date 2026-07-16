@@ -16,7 +16,7 @@
 | RAK4630 | 상시 Meshtastic | 무선 역할과 sleep 비율이 지배적 |
 | AHT20-F | 1분 간격 | 측정 후 대기 |
 | BMP388_TOKMAS | 1분 간격 | Forced mode 후 sleep |
-| MMA8652FC | 6.25/12.5 Hz | Low Power + 인터럽트 |
+| MMA8652FC | 기본 6.25 Hz | Low Power, 필요 시 12.5 Hz 비교 |
 | GNSS | 30분 간격 | fix 후 주 전원 차단 |
 | E-ink | 이벤트 기반 | 갱신 후 전원 차단 |
 | LED | 짧은 펄스 | 낮은 duty와 PWM 밝기 |

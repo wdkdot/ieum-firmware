@@ -27,7 +27,7 @@ Ieum의 `variant.cpp`는 RAK4631 variant와 동일하게 `g_ADigitalPinMap`을 `
 | `UART1_TX` | 보조 UART 송신 | 10 | `P0.20` | 20 | MCU TX |
 | `NRF_LED1` | LED 1 | 11 | `P0.21` | 21 | active high |
 | `EINK_EN` | E-ink 전원 제어 | 12 | `P0.10` | 10 | TPS22919 제어, active high |
-| `MMA_INT` | MMA8652FC 인터럽트 | 13 | `P0.09` | 9 | GPIO 인터럽트 입력 |
+| `MMA_INT` | MMA8652FC INT1 | 13 | `P0.09` | 9 | 직결, push-pull active high, MCU no-pull |
 | `SW_1` | 사용자 버튼 1 | 25 | `P1.01` | 33 | 외부 pull-up, 누르면 active low |
 | `SW_2` | 사용자 버튼 2 | 26 | `P1.02` | 34 | 외부 pull-up, 누르면 active low |
 | `NRF_LED2` | LED 2 | 27 | `P1.03` | 35 | active high |
@@ -71,6 +71,7 @@ NC 핀은 variant에서 주변장치 기능에 배정하지 않는다.
 - `variant.h`의 핀 매크로에는 **모듈 핀 번호가 아니라 펌웨어 핀 값**을 사용한다.
 - 예를 들어 버튼 1은 모듈 핀 `25`지만 `P1.01`이므로 코드 값은 `33`이다.
 - `P0.09`와 `P0.10`은 NFC 겸용 핀이므로 Ieum 빌드에서 GPIO로 사용할 수 있도록 nRF52 설정을 확인한다.
-- E-ink BUSY·RESET·CS와 MMA8652FC 인터럽트의 활성 레벨 및 pull 설정은 별도 자료와 실물로 확인한다.
+- E-ink BUSY·RESET·CS의 활성 레벨과 pull 설정은 별도 자료와 실물로 확인한다.
+- MMA8652FC INT1은 P0.09에 직결하며, latched active-high push-pull 출력과 rising-edge 입력을 사용한다.
 - BQ25628E `INT`의 이벤트 원인은 interrupt flag 레지스터를 읽어 판별하며, 읽은 flag는 clear된다.
 - RAK4630 내부 SX1262 연결은 이 외부 핀 표가 아니라 기존 RAK4631 variant 및 RAK4630 자료를 별도로 대조한다.

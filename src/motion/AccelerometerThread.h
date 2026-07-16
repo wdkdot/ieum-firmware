@@ -19,6 +19,9 @@
 #include "ICM42607PSensor.h"
 #include "LIS3DHSensor.h"
 #include "LSM6DS3Sensor.h"
+#ifdef HAS_MMA8652FC
+#include "MMA8652FCSensor.h"
+#endif
 #include "MPU6050Sensor.h"
 #include "MotionSensor.h"
 #ifdef HAS_QMA6100P
@@ -69,7 +72,8 @@ class AccelerometerThread : public concurrency::OSThread
         if (isInitialised)
             return sensor->runOnce();
 
-        return MOTION_SENSOR_CHECK_INTERVAL_MS;
+        init();
+        return MOTION_SENSOR_RETRY_INTERVAL_MS;
     }
 
   private:
@@ -95,6 +99,11 @@ class AccelerometerThread : public concurrency::OSThread
         case ScanI2C::DeviceType::MPU6050:
             sensor = new MPU6050Sensor(device);
             break;
+#ifdef HAS_MMA8652FC
+        case ScanI2C::DeviceType::MMA8652FC:
+            sensor = new MMA8652FCSensor(device);
+            break;
+#endif
         case ScanI2C::DeviceType::BMX160:
             sensor = new BMX160Sensor(device);
             break;

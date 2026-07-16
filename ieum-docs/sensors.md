@@ -45,6 +45,8 @@ Ieum에서는 1분마다 한 번 측정하므로 계속 측정하는 Normal mode
 - 해상도: 12비트
 - 측정 범위: ±2 g, ±4 g, ±8 g
 - 인터페이스: I²C
+- I²C 주소: 0x1D
+- WHO_AM_I: 레지스터 0x0D, 값 0x4A
 - ODR 범위: 1.56-800 Hz
 - FIFO: 32 sample
 - 패키지: DFN-10, 2×2×1 mm
@@ -56,12 +58,15 @@ PCB는 원래 MMA8653FC를 기준으로 설계했으나, MMA8652FC를 드롭인 
 ### Ieum 운용 계획
 
 - Low Power 모드
-- 우선 검토 ODR: 6.25 Hz 또는 12.5 Hz
-- MCU에 연결된 인터럽트 핀은 1개만 사용
+- 기본 ODR: 6.25 Hz
+- 반응성이 부족하면 12.5 Hz를 비교 검토
+- 초기 motion threshold: 1.25 g, debounce 320 ms; 실물 측정 후 조정
+- INT1을 P0.09에 직결하고 push-pull active high, latched interrupt로 사용
+- MCU 입력은 no-pull, rising edge로 설정
 - 정지·움직임 상태를 판단하여 GNSS 측정을 생략하거나 재개
 - 필요하면 방향, 충격 또는 탭 이벤트를 사용자 인터페이스에 활용
 
-하나의 인터럽트 선에 여러 이벤트를 라우팅할 수 있으므로, MCU는 인터럽트 발생 후 MMA8652FC의 source 레지스터를 읽어 원인을 판별해야 한다.
+하나의 인터럽트 선에 여러 이벤트를 라우팅할 수 있으므로, MCU는 인터럽트 발생 후 `INT_SOURCE`와 `FF_MT_SRC`를 읽어 원인을 판별하고 latch를 해제한다.
 
 ### 호환성 주의
 

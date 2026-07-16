@@ -52,6 +52,7 @@ void initVariant()
 {
     nrf_gpio_cfg_input(PIN_BUTTON1, NRF_GPIO_PIN_NOPULL);
     nrf_gpio_cfg_input(PIN_BUTTON2, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(IEUM_MOTION_INT_PIN, NRF_GPIO_PIN_NOPULL);
     nrf_gpio_cfg_input(IEUM_PMIC_INT_PIN, NRF_GPIO_PIN_NOPULL);
 }
 

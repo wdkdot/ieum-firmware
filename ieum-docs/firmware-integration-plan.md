@@ -90,6 +90,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. SSD1685 드라이버와 BUSY 동작이 미확정이므로 `HAS_SCREEN=0`과 `MESHTASTIC_USE_EINK_UI=0`은 유지한다.
 - 두 사용자 버튼은 외부 pull-up을 사용하며 active low로 공통 입력 기능에 연결했다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
+- MMA8652FC INT1은 P0.09에 직결하며 push-pull active high, latched interrupt로 설정했다. MCU 입력은 no-pull과 rising edge를 사용한다.
 - BQ25628E `INT`는 외부 pull-up된 open-drain active-low 256 µs pulse 입력으로 정의했다. TI 권장 pull-up은 10 kΩ이며, 인터럽트 처리는 BQ25628E 드라이버 추가 단계에서 구현한다.
 - 부팅과 종료 시 GNSS UART 및 E-ink 신호 핀은 pull 없는 기본 입력 상태로 두고, 두 active-high EN은 LOW로 비활성화한다.
 
@@ -104,7 +105,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 | AHT20-F | 지원됨 | 기존 AHT10/AHT20 환경 센서 드라이버 재사용 |
 | BMP388_TOKMAS | 지원됨 | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토 |
 | ATGM336H-5NR-32 | 지원됨 | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결 |
-| MMA8652FC | 미지원 | 공통 motion 드라이버, I²C 탐지와 생성 분기 추가 |
+| MMA8652FC | 초기 지원 | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ |
 | BQ25628E | 미지원 | 별도 power 드라이버와 Ieum 전원 관리자 추가 |
 | GDEY0266T90H / SSD1685 | 직접 지원 없음 | InkHUD용 패널 드라이버 추가 |
 | TPS22919-Q1 | GPIO 제어 가능 | E-ink 갱신 수명주기에 맞춰 전원 ON/OFF |
@@ -150,7 +151,7 @@ src/motion/MMA8652FCSensor.cpp
 - `src/motion/AccelerometerThread.h`: 드라이버 생성 분기 추가
 - Ieum `variant.h`: 인터럽트 핀 정의
 
-초기 범위는 12비트 XYZ, ±2/4/8 g, 6.25 또는 12.5 Hz low-power ODR, motion/still 인터럽트, source 레지스터 판별과 sleep/wake 처리다. I²C timeout, 오류 backoff와 재초기화도 포함한다. MMA8653FC와의 물리적 호환만으로 레지스터 동작까지 같다고 가정하지 않는다.
+초기 구현은 12비트 XYZ, ±2 g, 6.25 Hz Low Power ODR, INT1 latched motion IRQ와 I²C 오류 backoff·재초기화를 제공한다. 주소는 0x1D이며 WHO_AM_I 레지스터 0x0D에서 0x4A를 확인한다. INT1은 P0.09에 직결하고 push-pull active high로 구동하며, MCU는 no-pull rising-edge 입력을 사용한다. IRQ 처리 후 `INT_SOURCE`와 `FF_MT_SRC`를 읽어 원인을 확인하고 latch를 해제한다. ±4/8 g, Auto-WAKE/SLEEP과 FIFO는 실물 검증 후 확장한다. MMA8653FC와의 물리적 호환만으로 레지스터 동작까지 같다고 가정하지 않는다.
 
 ### BQ25628E
 
@@ -229,8 +230,7 @@ Ieum 전용 `#ifdef`를 `GPS.cpp` 여러 위치에 넣기보다 motion 상태를
 
 - RAK4630 GPIO와 회로 net 대응표
 - I²C SDA/SCL 핀
-- AHT20, BMP388, MMA8652FC와 BQ25628E의 주소 선택 상태
-- MMA8652FC 인터럽트 핀
+- AHT20, BMP388와 BQ25628E의 주소 선택 상태
 - GNSS 전원 안정화 시간과 UART off-state
 - E-ink CS/DC/RESET/BUSY 동작과 전원 안정화 시간
 - 버튼 2개의 최종 펌웨어 역할

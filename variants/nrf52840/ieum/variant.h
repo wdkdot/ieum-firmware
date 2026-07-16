@@ -95,7 +95,11 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define PIN_EINK_EN (10)   // P0.10, active high
 #define IEUM_EINK_EN_PIN PIN_EINK_EN
 
-#define IEUM_MOTION_INT_PIN (9) // P0.09
+#define HAS_MMA8652FC
+#define IEUM_MOTION_INT_PIN (9) // P0.09, direct from MMA8652FC INT1
+#define MMA8652FC_INT_PIN IEUM_MOTION_INT_PIN
+#define MMA8652FC_INT_ACTIVE HIGH
+#define MMA8652FC_INT1
 #define IEUM_PMIC_INT_PIN (5)   // P0.05, open-drain active-low pulse
 #define IEUM_PMIC_INT_ACTIVE LOW
 #define IEUM_PMIC_INT_PULSE_US 256

@@ -60,7 +60,7 @@ flowchart TD
 |---|---:|---|
 | 온습도 측정 | 1분 | AHT20-F |
 | 기압 측정 | 1분 | BMP388 forced mode 검토 |
-| 가속도 ODR | 6.25 또는 12.5 Hz | Low Power 우선 |
+| 가속도 ODR | 6.25 Hz | Low Power, 필요 시 12.5 Hz 비교 |
 | GNSS 위치 | 30분 | 정지 상태에서 생략 가능 |
 | Heartbeat LED | 5-10초마다 짧게 | PWM 밝기 제한 |
 | E-ink 갱신 | 이벤트 기반 | 불필요한 전체 갱신 억제 |
@@ -88,7 +88,7 @@ flowchart TD
 - 정확한 Meshtastic 기반 tag
 - Ieum board target 이름
 - BMP388 오버샘플링과 IIR 설정
-- MMA8652FC ODR 6.25 Hz와 12.5 Hz 중 기본값
+- MMA8652FC 6.25 Hz와 12.5 Hz의 실물 반응성 비교
 - GNSS fix timeout과 최대 생략 횟수
 - E-ink 실제 갱신 및 안정화 시간
 - BQ25628E의 최종 레지스터 설정
