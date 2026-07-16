@@ -57,7 +57,7 @@ MVP 병합 기준은 코드 검토, `pio run -e ieum`, 관련 정적 검사와 �
 | 3 | I²C inventory와 환경 telemetry | AHT20/BMP3XX 공통 드라이버 존재 | 주소 후보와 ID probe, AHT20/BMP388 telemetry 생성, timeout·오류 복구 경로 구현 | `codex/ieum-telemetry` |
 | 4 | ATGM336H 수명주기 | 핀과 rail-off 초기화만 구현, `HAS_GPS=0` | 전원 ON/OFF, 안정화 timeout, UART attach/detach·high-Z와 fix 종료 경로 구현 | `codex/ieum-gnss-power` |
 | 5 | MMA8652FC | 기능 브랜치 구현 및 빌드 성공 | WHO_AM_I 0x4A, 12비트 XYZ, INT1 source/latch 처리와 I²C 오류 복구 코드 통합 | 기존 `codex/mma8652fc-support` |
-| 6 | BQ25628E | INT 핀 정의만 존재, 드라이버 없음 | 주소·part ID, status/fault/ADC, interrupt flag, watchdog와 데이터시트 기반 보수적 설정 구현 | `codex/ieum-bq25628e` |
+| 6 | BQ25628E | 기능 브랜치 구현 및 빌드 성공 | 주소·part ID, status/fault/ADC, interrupt flag, watchdog와 데이터시트 기반 보수적 설정 구현 | `ieum/bq25628e-support` |
 | 7 | GDEY0266T90H InkHUD | 핀과 rail-off 초기화만 구현, 화면 비활성 | SSD1685 전체 갱신, BUSY timeout, deep sleep, GPIO high-Z와 TPS22919 수명주기 구현 | `codex/ieum-inkhud` |
 | 8 | 소프트웨어 통합 | 미수행 | 모든 기능을 함께 빌드하고 주변장치 오류가 LoRa/BLE/USB 흐름을 막지 않도록 구성 | `codex/ieum-mvp-integration` |
 
@@ -70,7 +70,7 @@ CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작
 - RAK4631 부트로더·메모리 배치 재사용의 실물 SWD/USB 호환성
 - 실제 장착될 I²C 부품의 주소와 ID
 - ATGM336H-5NR-32의 baud rate, NMEA 설정, 전원 안정화 시간과 UART off-state
-- BQ25628E 주소·part ID, 배터리 최대 충전 전압·전류, 입력 전류 제한과 watchdog 정책
+- BQ25628E 주소·part ID는 데이터시트 기준으로 구현함. 배터리 최대 충전 전압·전류, 입력 제한 실측과 watchdog 비활성 정책은 실기기에서 확인
 - SSD1685 초기화·LUT·RAM 방향, BUSY/RESET/CS active level과 전원 안정화 시간
 - GNSS와 E-ink 전원 차단 상태의 신호 pin 전압 및 역급전 전류
 
@@ -85,7 +85,7 @@ CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작
 - [ ] AHT20-F와 BMP388 probe·telemetry·오류 복구 구현
 - [ ] ATGM336H fix timeout·UART 격리·전원 수명주기 구현
 - [ ] MMA8652FC XYZ·INT1·latch 해제·오류 복구 구현
-- [ ] BQ25628E 식별·상태·fault·보수적 충전 설정 구현
+- [x] BQ25628E 식별·상태·fault·보수적 충전 설정 구현
 - [ ] GDEY0266T90H 전체 갱신·BUSY timeout·deep sleep·rail-off 구현
 - [ ] 주변장치 실패가 LoRa, BLE와 USB 흐름을 막지 않도록 bounded wait 적용
 - [ ] 코드 검토와 빌드 확인을 마친 기능을 `ieum/main`에 순차 병합
