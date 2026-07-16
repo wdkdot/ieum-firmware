@@ -88,11 +88,11 @@ static const uint8_t SCK = PIN_SPI_SCK;
 
 #define PIN_EINK_SCLK PIN_SPI1_SCK
 #define PIN_EINK_MOSI PIN_SPI1_MOSI
-#define PIN_EINK_CS (26)   // P0.26
-#define PIN_EINK_DC (29)   // P0.29
-#define PIN_EINK_RES (28)  // P0.28
-#define PIN_EINK_BUSY (2)  // P0.02
-#define PIN_EINK_EN (10)   // P0.10, active high
+#define PIN_EINK_CS (26)  // P0.26
+#define PIN_EINK_DC (29)  // P0.29
+#define PIN_EINK_RES (28) // P0.28
+#define PIN_EINK_BUSY (2) // P0.02
+#define PIN_EINK_EN (10)  // P0.10, active high
 #define IEUM_EINK_EN_PIN PIN_EINK_EN
 
 #define HAS_MMA8652FC
@@ -101,7 +101,7 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define MMA8652FC_INT_ACTIVE HIGH
 #define MMA8652FC_INT1
 #define HAS_BQ25628E
-#define IEUM_PMIC_INT_PIN (5)   // P0.05, open-drain active-low pulse
+#define IEUM_PMIC_INT_PIN (5) // P0.05, open-drain active-low pulse
 #define IEUM_PMIC_INT_ACTIVE LOW
 #define IEUM_PMIC_INT_PULSE_US 256
 #define BQ25628E_WIRE Wire

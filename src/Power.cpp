@@ -1037,8 +1037,8 @@ int32_t Power::runOnce()
 
             const auto &flags = bq25628e->interruptFlags();
             if (flags.hasNonAdcEvent()) {
-                LOG_DEBUG("BQ25628E flags: status0=0x%02x status1=0x%02x fault=0x%02x",
-                          flags.status0, flags.status1, flags.fault);
+                LOG_DEBUG("BQ25628E flags: status0=0x%02x status1=0x%02x fault=0x%02x", flags.status0, flags.status1,
+                          flags.fault);
             }
 
             const uint8_t currentFaultStatus = bq25628e->status().faultStatus;

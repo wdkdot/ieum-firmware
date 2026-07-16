@@ -82,7 +82,7 @@ constexpr int16_t signExtend(uint16_t value, uint8_t bits)
 {
     const uint16_t signBit = static_cast<uint16_t>(1U << (bits - 1U));
     return (value & signBit) != 0U ? static_cast<int16_t>(static_cast<int32_t>(value) - (1L << bits))
-                                  : static_cast<int16_t>(value);
+                                   : static_cast<int16_t>(value);
 }
 
 constexpr uint16_t scaleRounded(uint16_t value, uint16_t numerator)
@@ -206,25 +206,21 @@ bool BQ25628E::updateRegister16(uint8_t reg, uint16_t mask, uint16_t value)
 
 bool BQ25628E::validateConfiguration(const Configuration &configuration) const
 {
-    const bool inputCurrentValid = configuration.inputCurrentLimitMa >= 100U &&
-                                   configuration.inputCurrentLimitMa <= 3200U &&
+    const bool inputCurrentValid = configuration.inputCurrentLimitMa >= 100U && configuration.inputCurrentLimitMa <= 3200U &&
                                    configuration.inputCurrentLimitMa % 20U == 0U;
-    const bool chargeCurrentValid = configuration.chargeCurrentLimitMa >= 40U &&
-                                    configuration.chargeCurrentLimitMa <= 2000U &&
+    const bool chargeCurrentValid = configuration.chargeCurrentLimitMa >= 40U && configuration.chargeCurrentLimitMa <= 2000U &&
                                     configuration.chargeCurrentLimitMa % 40U == 0U;
-    const bool chargeVoltageValid = configuration.chargeVoltageLimitMv >= 3500U &&
-                                    configuration.chargeVoltageLimitMv <= 4800U &&
+    const bool chargeVoltageValid = configuration.chargeVoltageLimitMv >= 3500U && configuration.chargeVoltageLimitMv <= 4800U &&
                                     configuration.chargeVoltageLimitMv % 10U == 0U;
-    const bool inputOvpValid = configuration.inputOvervoltageProtectionMv == 6300U ||
-                               configuration.inputOvervoltageProtectionMv == 18500U;
+    const bool inputOvpValid =
+        configuration.inputOvervoltageProtectionMv == 6300U || configuration.inputOvervoltageProtectionMv == 18500U;
     const bool watchdogValid = configuration.watchdogSeconds == 0U || configuration.watchdogSeconds == 50U ||
                                configuration.watchdogSeconds == 100U || configuration.watchdogSeconds == 200U;
 
     if (!inputCurrentValid || !chargeCurrentValid || !chargeVoltageValid || !inputOvpValid || !watchdogValid) {
         LOG_WARN("BQ25628E invalid configuration: input=%umA charge=%umA/%umV OVP=%umV watchdog=%us",
-                 configuration.inputCurrentLimitMa, configuration.chargeCurrentLimitMa,
-                 configuration.chargeVoltageLimitMv, configuration.inputOvervoltageProtectionMv,
-                 configuration.watchdogSeconds);
+                 configuration.inputCurrentLimitMa, configuration.chargeCurrentLimitMa, configuration.chargeVoltageLimitMv,
+                 configuration.inputOvervoltageProtectionMv, configuration.watchdogSeconds);
         return false;
     }
     return true;
@@ -236,18 +232,13 @@ bool BQ25628E::writeConfiguration(const Configuration &configuration)
                                                          encodeWatchdog(configuration.watchdogSeconds));
     const uint8_t externalIlim = configuration.externalInputCurrentLimitEnabled ? EXTERNAL_ILIM_ENABLE_MASK : 0U;
 
-    return updateRegister16(REG_INPUT_CURRENT_LIMIT, IINDPM_MASK,
-                            encodeInputCurrent(configuration.inputCurrentLimitMa)) &&
-           updateRegister16(REG_CHARGE_CURRENT_LIMIT, ICHG_MASK,
-                            encodeChargeCurrent(configuration.chargeCurrentLimitMa)) &&
-           updateRegister16(REG_CHARGE_VOLTAGE_LIMIT, VREG_MASK,
-                            encodeChargeVoltage(configuration.chargeVoltageLimitMv)) &&
-           updateRegister8(REG_CHARGER_CONTROL1, INPUT_OVP_MASK,
-                           encodeInputOvp(configuration.inputOvervoltageProtectionMv)) &&
+    return updateRegister16(REG_INPUT_CURRENT_LIMIT, IINDPM_MASK, encodeInputCurrent(configuration.inputCurrentLimitMa)) &&
+           updateRegister16(REG_CHARGE_CURRENT_LIMIT, ICHG_MASK, encodeChargeCurrent(configuration.chargeCurrentLimitMa)) &&
+           updateRegister16(REG_CHARGE_VOLTAGE_LIMIT, VREG_MASK, encodeChargeVoltage(configuration.chargeVoltageLimitMv)) &&
+           updateRegister8(REG_CHARGER_CONTROL1, INPUT_OVP_MASK, encodeInputOvp(configuration.inputOvervoltageProtectionMv)) &&
            updateRegister8(REG_CHARGER_CONTROL3, EXTERNAL_ILIM_ENABLE_MASK, externalIlim) &&
            updateRegister8(REG_CHARGER_MASK0, ADC_DONE_MASK, ADC_DONE_MASK) &&
-           updateRegister8(REG_CHARGER_CONTROL0,
-                           static_cast<uint8_t>(CHARGE_ENABLE_MASK | WATCHDOG_RESET_MASK | WATCHDOG_MASK),
+           updateRegister8(REG_CHARGER_CONTROL0, static_cast<uint8_t>(CHARGE_ENABLE_MASK | WATCHDOG_RESET_MASK | WATCHDOG_MASK),
                            chargerControl0);
 }
 
@@ -261,19 +252,16 @@ bool BQ25628E::verifyConfiguration(const Configuration &configuration)
     uint8_t chargerControl3 = 0;
     uint8_t chargerMask0 = 0;
 
-    if (!readRegister16(REG_INPUT_CURRENT_LIMIT, inputCurrent) ||
-        !readRegister16(REG_CHARGE_CURRENT_LIMIT, chargeCurrent) ||
-        !readRegister16(REG_CHARGE_VOLTAGE_LIMIT, chargeVoltage) ||
-        !readRegister8(REG_CHARGER_CONTROL0, chargerControl0) ||
-        !readRegister8(REG_CHARGER_CONTROL1, chargerControl1) ||
-        !readRegister8(REG_CHARGER_CONTROL3, chargerControl3) || !readRegister8(REG_CHARGER_MASK0, chargerMask0)) {
+    if (!readRegister16(REG_INPUT_CURRENT_LIMIT, inputCurrent) || !readRegister16(REG_CHARGE_CURRENT_LIMIT, chargeCurrent) ||
+        !readRegister16(REG_CHARGE_VOLTAGE_LIMIT, chargeVoltage) || !readRegister8(REG_CHARGER_CONTROL0, chargerControl0) ||
+        !readRegister8(REG_CHARGER_CONTROL1, chargerControl1) || !readRegister8(REG_CHARGER_CONTROL3, chargerControl3) ||
+        !readRegister8(REG_CHARGER_MASK0, chargerMask0)) {
         return false;
     }
 
     const uint8_t expectedControl0 = static_cast<uint8_t>((configuration.chargeEnabled ? CHARGE_ENABLE_MASK : 0U) |
                                                           encodeWatchdog(configuration.watchdogSeconds));
-    const uint8_t expectedExternalIlim =
-        configuration.externalInputCurrentLimitEnabled ? EXTERNAL_ILIM_ENABLE_MASK : 0U;
+    const uint8_t expectedExternalIlim = configuration.externalInputCurrentLimitEnabled ? EXTERNAL_ILIM_ENABLE_MASK : 0U;
 
     return (inputCurrent & IINDPM_MASK) == encodeInputCurrent(configuration.inputCurrentLimitMa) &&
            (chargeCurrent & ICHG_MASK) == encodeChargeCurrent(configuration.chargeCurrentLimitMa) &&
@@ -287,8 +275,7 @@ bool BQ25628E::verifyConfiguration(const Configuration &configuration)
 bool BQ25628E::applyConfiguration(const Configuration &configuration)
 {
     if (wire_ == nullptr || partNumber_ != EXPECTED_PART_NUMBER || !validateConfiguration(configuration) ||
-        !writeConfiguration(configuration) ||
-        !verifyConfiguration(configuration)) {
+        !writeConfiguration(configuration) || !verifyConfiguration(configuration)) {
         return false;
     }
     configuration_ = configuration;
@@ -342,8 +329,8 @@ bool BQ25628E::begin(TwoWire &wire, uint8_t address, const Configuration &config
         LOG_WARN("BQ25628E initial ADC conversion failed; status reporting remains available");
     }
 
-    LOG_INFO("BQ25628E detected at 0x%02x (PN=%u rev=%u), input=%umA charge=%umA/%umV watchdog=%us", address_,
-             partNumber_, revision_, configuration_.inputCurrentLimitMa, configuration_.chargeCurrentLimitMa,
+    LOG_INFO("BQ25628E detected at 0x%02x (PN=%u rev=%u), input=%umA charge=%umA/%umV watchdog=%us", address_, partNumber_,
+             revision_, configuration_.inputCurrentLimitMa, configuration_.chargeCurrentLimitMa,
              configuration_.chargeVoltageLimitMv, configuration_.watchdogSeconds);
     return true;
 }
@@ -428,9 +415,8 @@ bool BQ25628E::updateMeasurements()
     uint16_t vsys = 0;
     uint16_t ts = 0;
     uint16_t tdie = 0;
-    if (!readRegister16(REG_IBUS_ADC, ibus) || !readRegister16(REG_IBAT_ADC, ibat) ||
-        !readRegister16(REG_VBUS_ADC, vbus) || !readRegister16(REG_VPMID_ADC, vpmid) ||
-        !readRegister16(REG_VBAT_ADC, vbat) || !readRegister16(REG_VSYS_ADC, vsys) ||
+    if (!readRegister16(REG_IBUS_ADC, ibus) || !readRegister16(REG_IBAT_ADC, ibat) || !readRegister16(REG_VBUS_ADC, vbus) ||
+        !readRegister16(REG_VPMID_ADC, vpmid) || !readRegister16(REG_VBAT_ADC, vbat) || !readRegister16(REG_VSYS_ADC, vsys) ||
         !readRegister16(REG_TS_ADC, ts) || !readRegister16(REG_TDIE_ADC, tdie)) {
         return false;
     }
@@ -438,15 +424,13 @@ bool BQ25628E::updateMeasurements()
     measurements_.inputCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(ibus >> 1), 15) * 2);
     measurements_.batteryCurrentValid = ibat != 0x8000U;
     if (measurements_.batteryCurrentValid) {
-        measurements_.batteryCurrentMa =
-            static_cast<int16_t>(signExtend(static_cast<uint16_t>(ibat >> 2), 14) * 4);
+        measurements_.batteryCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(ibat >> 2), 14) * 4);
     }
     measurements_.inputVoltageMv = scaleRounded(static_cast<uint16_t>((vbus >> 2) & 0x1FFFU), 397);
     measurements_.pmidVoltageMv = scaleRounded(static_cast<uint16_t>((vpmid >> 2) & 0x1FFFU), 397);
     measurements_.batteryVoltageMv = scaleRounded(static_cast<uint16_t>((vbat >> 1) & 0x0FFFU), 199);
     measurements_.systemVoltageMv = scaleRounded(static_cast<uint16_t>((vsys >> 1) & 0x0FFFU), 199);
-    measurements_.thermistorPermille =
-        static_cast<uint16_t>((static_cast<uint32_t>(ts & 0x0FFFU) * 961U + 500U) / 1000U);
+    measurements_.thermistorPermille = static_cast<uint16_t>((static_cast<uint32_t>(ts & 0x0FFFU) * 961U + 500U) / 1000U);
     measurements_.dieTemperatureDeciC = static_cast<int16_t>(signExtend(tdie & 0x0FFFU, 12) * 5);
     measurements_.valid = true;
     return true;

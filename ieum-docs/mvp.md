@@ -35,14 +35,14 @@ MVP 병합 기준은 코드 검토, `pio run -e ieum`, 관련 정적 검사와 �
 - **구현됨**: 코드가 기능 브랜치에 있으나 아직 통합되지 않았다.
 - **빌드 확인**: `pio run -e ieum`이 성공했다.
 
-| 브랜치 | 끝 commit | 현재 내용 | 판정 |
-| --- | --- | --- | --- |
-| `origin/ieum/main` | `d1e031c19` | 프로젝트 문서, `ieum` PlatformIO 환경, RAK4630/SX1262 및 외부 GPIO 정의, 부팅·종료 시 GNSS/E-ink rail 비활성화 | 통합됨 |
-| `origin/codex/ieum-project-docs` | `e69be6561` | `ieum-docs/` 하드웨어·통합 문서 | `ieum/main`에 통합됨 |
-| `origin/codex/ieum-board-support-base` | `6608e2b62` | 초기 Ieum variant와 GPIO active level 정리 | `ieum/main`에 통합됨 |
-| `origin/codex/ieum-board-support` | `57cb77701` | 초기 MMA8652FC 탐지, 12비트 XYZ, motion IRQ와 오류 backoff | 후속 브랜치가 대체함 |
-| `origin/codex/mma8652fc-support` | `3925fbeaa` | 위 motion 지원과 latched interrupt source 해제 수정 | 구현됨, 빌드 확인 |
-| `origin/codex/ieum-actions-cleanup` | `1b1027125` | upstream workflow 다수를 제거하고 `ieum_ci.yml`로 `pio run -e ieum` 실행 | 미통합, 범위 검토 필요 |
+| 브랜치                                 | 끝 commit   | 현재 내용                                                                                                      | 판정                   |
+| -------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `origin/ieum/main`                     | `d1e031c19` | 프로젝트 문서, `ieum` PlatformIO 환경, RAK4630/SX1262 및 외부 GPIO 정의, 부팅·종료 시 GNSS/E-ink rail 비활성화 | 통합됨                 |
+| `origin/codex/ieum-project-docs`       | `e69be6561` | `ieum-docs/` 하드웨어·통합 문서                                                                                | `ieum/main`에 통합됨   |
+| `origin/codex/ieum-board-support-base` | `6608e2b62` | 초기 Ieum variant와 GPIO active level 정리                                                                     | `ieum/main`에 통합됨   |
+| `origin/codex/ieum-board-support`      | `57cb77701` | 초기 MMA8652FC 탐지, 12비트 XYZ, motion IRQ와 오류 backoff                                                     | 후속 브랜치가 대체함   |
+| `origin/codex/mma8652fc-support`       | `3925fbeaa` | 위 motion 지원과 latched interrupt source 해제 수정                                                            | 구현됨, 빌드 확인      |
+| `origin/codex/ieum-actions-cleanup`    | `1b1027125` | upstream workflow 다수를 제거하고 `ieum_ci.yml`로 `pio run -e ieum` 실행                                       | 미통합, 범위 검토 필요 |
 
 원래 작업 브랜치였던 `codex/mma8652fc-support` 밖의 독립된 구현은 `codex/ieum-actions-cleanup`의 CI 정리다. 이 브랜치는 보드 variant가 들어오기 전 commit에서 갈라졌으므로 브랜치 전체를 병합하기보다, 삭제 범위를 검토한 뒤 필요한 CI commit만 최신 `ieum/main` 기반 브랜치로 옮기는 편이 안전하다.
 
@@ -50,16 +50,16 @@ MVP 병합 기준은 코드 검토, `pio run -e ieum`, 관련 정적 검사와 �
 
 ## 남은 MVP 작업
 
-| 순서 | 작업 | 현재 상태 | 완료 조건 | 권장 브랜치 |
-| ---: | --- | --- | --- | --- |
-| 1 | SWD·USB·기본 부팅 | variant 구현됨 | RAK4631 기반 부트로더·USB·복구 설정을 문서화하고 `ieum` build에 포함 | `codex/ieum-bringup` |
-| 2 | RAK4630 LoRa·BLE | 기존 Meshtastic 지원 재사용 | Ieum variant에서 기존 SX1262와 nRF52 BLE 경로가 함께 빌드됨 | `codex/ieum-bringup` |
-| 3 | I²C inventory와 환경 telemetry | AHT20/BMP3XX 공통 드라이버 존재 | 주소 후보와 ID probe, AHT20/BMP388 telemetry 생성, timeout·오류 복구 경로 구현 | `codex/ieum-telemetry` |
-| 4 | ATGM336H 수명주기 | 핀과 rail-off 초기화만 구현, `HAS_GPS=0` | 전원 ON/OFF, 안정화 timeout, UART attach/detach·high-Z와 fix 종료 경로 구현 | `codex/ieum-gnss-power` |
-| 5 | MMA8652FC | 기능 브랜치 구현 및 빌드 성공 | WHO_AM_I 0x4A, 12비트 XYZ, INT1 source/latch 처리와 I²C 오류 복구 코드 통합 | 기존 `codex/mma8652fc-support` |
-| 6 | BQ25628E | 기능 브랜치 구현 및 빌드 성공 | 주소·part ID, status/fault/ADC, interrupt flag, watchdog와 데이터시트 기반 보수적 설정 구현 | `ieum/bq25628e-support` |
-| 7 | GDEY0266T90H InkHUD | 핀과 rail-off 초기화만 구현, 화면 비활성 | SSD1685 전체 갱신, BUSY timeout, deep sleep, GPIO high-Z와 TPS22919 수명주기 구현 | `codex/ieum-inkhud` |
-| 8 | 소프트웨어 통합 | 미수행 | 모든 기능을 함께 빌드하고 주변장치 오류가 LoRa/BLE/USB 흐름을 막지 않도록 구성 | `codex/ieum-mvp-integration` |
+| 순서 | 작업                           | 현재 상태                                | 완료 조건                                                                                   | 권장 브랜치                    |
+| ---: | ------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------ |
+|    1 | SWD·USB·기본 부팅              | variant 구현됨                           | RAK4631 기반 부트로더·USB·복구 설정을 문서화하고 `ieum` build에 포함                        | `codex/ieum-bringup`           |
+|    2 | RAK4630 LoRa·BLE               | 기존 Meshtastic 지원 재사용              | Ieum variant에서 기존 SX1262와 nRF52 BLE 경로가 함께 빌드됨                                 | `codex/ieum-bringup`           |
+|    3 | I²C inventory와 환경 telemetry | AHT20/BMP3XX 공통 드라이버 존재          | 주소 후보와 ID probe, AHT20/BMP388 telemetry 생성, timeout·오류 복구 경로 구현              | `codex/ieum-telemetry`         |
+|    4 | ATGM336H 수명주기              | 핀과 rail-off 초기화만 구현, `HAS_GPS=0` | 전원 ON/OFF, 안정화 timeout, UART attach/detach·high-Z와 fix 종료 경로 구현                 | `codex/ieum-gnss-power`        |
+|    5 | MMA8652FC                      | 기능 브랜치 구현 및 빌드 성공            | WHO_AM_I 0x4A, 12비트 XYZ, INT1 source/latch 처리와 I²C 오류 복구 코드 통합                 | 기존 `codex/mma8652fc-support` |
+|    6 | BQ25628E                       | 기능 브랜치 구현 및 빌드 성공            | 주소·part ID, status/fault/ADC, interrupt flag, watchdog와 데이터시트 기반 보수적 설정 구현 | `ieum/bq25628e-support`        |
+|    7 | GDEY0266T90H InkHUD            | 핀과 rail-off 초기화만 구현, 화면 비활성 | SSD1685 전체 갱신, BUSY timeout, deep sleep, GPIO high-Z와 TPS22919 수명주기 구현           | `codex/ieum-inkhud`            |
+|    8 | 소프트웨어 통합                | 미수행                                   | 모든 기능을 함께 빌드하고 주변장치 오류가 LoRa/BLE/USB 흐름을 막지 않도록 구성              | `codex/ieum-mvp-integration`   |
 
 CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작업이다. `codex/ieum-actions-cleanup`이 삭제하는 upstream workflow가 너무 넓으므로, 최소한 Ieum 빌드와 필요한 정적 검사만 남기는 정책을 별도 검토한 뒤 적용한다.
 

@@ -2,7 +2,7 @@
 
 ## 전원 경로
 
-~~~mermaid
+```mermaid
 flowchart TD
     USB["USB-C VBUS 5 V"] --> PMIC["BQ25628E"]
     BAT["Li-Po 3,000 mAh"] <--> PMIC
@@ -12,7 +12,7 @@ flowchart TD
     MAIN --> CORE["RAK4630 + 센서"]
     MAIN --> LOAD["TPS22919QDCKRQ1"]
     LOAD --> EINK["E-ink 3V3_SW"]
-~~~
+```
 
 ## BQ25628E
 

@@ -98,17 +98,17 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 
 ## 부품별 적용 방침
 
-| 부품 | 현재 지원 | 적용 방침 |
-|---|---|---|
-| RAK4630 / nRF52840 | 지원됨 | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성 |
-| SX1262 | 지원됨 | RAK4630 내부 연결과 RF switch/TCXO 설정 확인 |
-| AHT20-F | 지원됨 | 기존 AHT10/AHT20 환경 센서 드라이버 재사용 |
-| BMP388_TOKMAS | 지원됨 | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토 |
-| ATGM336H-5NR-32 | 지원됨 | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결 |
-| MMA8652FC | 초기 지원 | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ |
-| BQ25628E | 초기 지원 | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
-| GDEY0266T90H / SSD1685 | 직접 지원 없음 | InkHUD용 패널 드라이버 추가 |
-| TPS22919-Q1 | GPIO 제어 가능 | E-ink 갱신 수명주기에 맞춰 전원 ON/OFF |
+| 부품                   | 현재 지원      | 적용 방침                                                                               |
+| ---------------------- | -------------- | --------------------------------------------------------------------------------------- |
+| RAK4630 / nRF52840     | 지원됨         | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성                        |
+| SX1262                 | 지원됨         | RAK4630 내부 연결과 RF switch/TCXO 설정 확인                                            |
+| AHT20-F                | 지원됨         | 기존 AHT10/AHT20 환경 센서 드라이버 재사용                                              |
+| BMP388_TOKMAS          | 지원됨         | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토                            |
+| ATGM336H-5NR-32        | 지원됨         | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결                                        |
+| MMA8652FC              | 초기 지원      | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ                     |
+| BQ25628E               | 초기 지원      | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
+| GDEY0266T90H / SSD1685 | 직접 지원 없음 | InkHUD용 패널 드라이버 추가                                                             |
+| TPS22919-Q1            | GPIO 제어 가능 | E-ink 갱신 수명주기에 맞춰 전원 ON/OFF                                                  |
 
 ## 기존 지원을 재사용하는 부품
 
