@@ -22,6 +22,7 @@
 #include "configuration.h"
 #include "main.h"
 #include "meshUtils.h"
+#include "power/BQ25628E.h"
 #include "power/PowerHAL.h"
 #include "power/SGM41562.h"
 #include "sleep.h"
@@ -706,6 +707,10 @@ bool Power::analogInit()
  */
 bool Power::setup()
 {
+#ifdef HAS_BQ25628E
+    // The charger remains autonomous if probing fails, so a missing PMIC must not block startup.
+    const bool bq25628eFound = initBQ25628E(BQ25628E_WIRE);
+#endif
 #ifdef HAS_SGM41562
     // Initialize the charger early so AnalogBatteryLevel can read charging
     // state from it. The charger does not provide battery voltage / percent —
@@ -732,6 +737,9 @@ bool Power::setup()
         found = true;
 #endif
     }
+#ifdef HAS_BQ25628E
+    found = found || bq25628eFound;
+#endif
     attachPowerInterrupts();
     enabled = found;
     low_voltage_counter = 0;
@@ -884,11 +892,30 @@ void Power::readPowerStatus()
 
     // If changed to DISCONNECTED
     if (nrf_usb_state == NRFX_POWER_USB_STATE_DISCONNECTED)
-        isChargingNow = usbPowered = OptFalse;
+        usbPowered = OptFalse;
     // If changed to CONNECTED / READY
     else
-        isChargingNow = usbPowered = OptTrue;
+        usbPowered = OptTrue;
 
+#ifndef HAS_BQ25628E
+    isChargingNow = usbPowered;
+#else
+    if (bq25628e == nullptr) {
+        isChargingNow = usbPowered;
+    }
+#endif
+
+#endif
+
+#ifdef HAS_BQ25628E
+    if (bq25628e != nullptr && bq25628e->lastStatusReadSucceeded()) {
+        usbPowered = bq25628e->hasInput() ? OptTrue : OptFalse;
+        isChargingNow = bq25628e->isCharging() ? OptTrue : OptFalse;
+        if (bq25628e->measurements().valid) {
+            // The charger has no reliable battery-presence bit, so voltage alone must not change hasBattery.
+            batteryVoltageMv = bq25628e->measurements().batteryVoltageMv;
+        }
+    }
 #endif
 
     // Notify any status instances that are observing us
@@ -981,6 +1008,64 @@ void Power::readPowerStatus()
 
 int32_t Power::runOnce()
 {
+#ifdef HAS_BQ25628E
+    if (bq25628e != nullptr) {
+        static bool communicationFailed = false;
+        static bool measurementFailed = false;
+        static bool vbusKnown = false;
+        static bool previousVbus = false;
+        static uint8_t previousFaultStatus = 0;
+
+        if (!bq25628e->refreshStatus()) {
+            if (!communicationFailed) {
+                LOG_WARN("BQ25628E status read failed; retaining autonomous charger operation");
+            }
+            communicationFailed = true;
+        } else {
+            if (communicationFailed) {
+                LOG_INFO("BQ25628E communication restored");
+            }
+            communicationFailed = false;
+
+            const bool currentVbus = bq25628e->hasInput();
+            if (vbusKnown && currentVbus != previousVbus) {
+                LOG_INFO("BQ25628E USB %s", currentVbus ? "connected" : "disconnected");
+                powerFSM.trigger(currentVbus ? EVENT_POWER_CONNECTED : EVENT_POWER_DISCONNECTED);
+            }
+            previousVbus = currentVbus;
+            vbusKnown = true;
+
+            const auto &flags = bq25628e->interruptFlags();
+            if (flags.hasNonAdcEvent()) {
+                LOG_DEBUG("BQ25628E flags: status0=0x%02x status1=0x%02x fault=0x%02x", flags.status0, flags.status1,
+                          flags.fault);
+            }
+
+            const uint8_t currentFaultStatus = bq25628e->status().faultStatus;
+            if (currentFaultStatus != previousFaultStatus) {
+                if (currentFaultStatus != 0U) {
+                    LOG_WARN("BQ25628E fault status changed to 0x%02x", currentFaultStatus);
+                } else {
+                    LOG_INFO("BQ25628E fault status cleared");
+                }
+                previousFaultStatus = currentFaultStatus;
+            }
+
+            if (!bq25628e->updateMeasurements()) {
+                if (!measurementFailed) {
+                    LOG_WARN("BQ25628E ADC conversion failed; charger status remains available");
+                }
+                measurementFailed = true;
+            } else {
+                if (measurementFailed) {
+                    LOG_INFO("BQ25628E ADC measurements restored");
+                }
+                measurementFailed = false;
+            }
+        }
+    }
+#endif
+
     readPowerStatus();
 
 #ifdef HAS_PMU
@@ -1099,6 +1184,19 @@ void Power::attachPowerInterrupts()
             FALLING);
     }
 #endif
+#ifdef BQ25628E_INT_PIN
+    if (bq25628e != nullptr) {
+        pinMode(BQ25628E_INT_PIN, INPUT);
+        attachInterrupt(
+            BQ25628E_INT_PIN,
+            [] {
+                bq25628e->notifyInterrupt();
+                power->setIntervalFromNow(0);
+                runASAP = true;
+            },
+            BQ25628E_INT_ACTIVE == LOW ? FALLING : RISING);
+    }
+#endif
 }
 
 /*
@@ -1119,6 +1217,11 @@ void Power::detachPowerInterrupts()
 #ifdef PMU_IRQ
     if (PMU) {
         detachInterrupt(PMU_IRQ);
+    }
+#endif
+#ifdef BQ25628E_INT_PIN
+    if (bq25628e != nullptr) {
+        detachInterrupt(BQ25628E_INT_PIN);
     }
 #endif
 }

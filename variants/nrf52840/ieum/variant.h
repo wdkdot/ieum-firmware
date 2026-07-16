@@ -88,11 +88,11 @@ static const uint8_t SCK = PIN_SPI_SCK;
 
 #define PIN_EINK_SCLK PIN_SPI1_SCK
 #define PIN_EINK_MOSI PIN_SPI1_MOSI
-#define PIN_EINK_CS (26)   // P0.26
-#define PIN_EINK_DC (29)   // P0.29
-#define PIN_EINK_RES (28)  // P0.28
-#define PIN_EINK_BUSY (2)  // P0.02
-#define PIN_EINK_EN (10)   // P0.10, active high
+#define PIN_EINK_CS (26)  // P0.26
+#define PIN_EINK_DC (29)  // P0.29
+#define PIN_EINK_RES (28) // P0.28
+#define PIN_EINK_BUSY (2) // P0.02
+#define PIN_EINK_EN (10)  // P0.10, active high
 #define IEUM_EINK_EN_PIN PIN_EINK_EN
 
 #define HAS_MMA8652FC
@@ -100,9 +100,18 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define MMA8652FC_INT_PIN IEUM_MOTION_INT_PIN
 #define MMA8652FC_INT_ACTIVE HIGH
 #define MMA8652FC_INT1
-#define IEUM_PMIC_INT_PIN (5)   // P0.05, open-drain active-low pulse
+#define HAS_BQ25628E
+#define IEUM_PMIC_INT_PIN (5) // P0.05, open-drain active-low pulse
 #define IEUM_PMIC_INT_ACTIVE LOW
 #define IEUM_PMIC_INT_PULSE_US 256
+#define BQ25628E_WIRE Wire
+#define BQ25628E_INT_PIN IEUM_PMIC_INT_PIN
+#define BQ25628E_INT_ACTIVE IEUM_PMIC_INT_ACTIVE
+#define BQ25628E_INPUT_CURRENT_LIMIT_MA 500
+#define BQ25628E_CHARGE_CURRENT_LIMIT_MA 320
+#define BQ25628E_CHARGE_VOLTAGE_LIMIT_MV 4200
+#define BQ25628E_INPUT_OVP_MV 6300
+#define BQ25628E_WATCHDOG_SECONDS 0
 #define IEUM_BUTTON1_PIN PIN_BUTTON1
 #define IEUM_BUTTON2_PIN PIN_BUTTON2
 #define IEUM_LED1_PIN PIN_LED1

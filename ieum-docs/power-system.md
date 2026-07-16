@@ -2,7 +2,7 @@
 
 ## 전원 경로
 
-~~~mermaid
+```mermaid
 flowchart TD
     USB["USB-C VBUS 5 V"] --> PMIC["BQ25628E"]
     BAT["Li-Po 3,000 mAh"] <--> PMIC
@@ -12,7 +12,7 @@ flowchart TD
     MAIN --> CORE["RAK4630 + 센서"]
     MAIN --> LOAD["TPS22919QDCKRQ1"]
     LOAD --> EINK["E-ink 3V3_SW"]
-~~~
+```
 
 ## BQ25628E
 
@@ -39,7 +39,20 @@ Ieum에서 기대하는 역할:
 
 `INT`는 외부 pull-up을 사용하는 open-drain active-low 출력이며, TI 권장 pull-up은 10 kΩ이다. 상태 또는 fault 변경 시 기본 256 µs LOW 펄스를 출력한다. 호스트는 interrupt flag 레지스터를 읽어 원인을 확인하고, 읽은 flag는 clear된다. 전원 인가 펄스가 MCU 인터럽트 초기화보다 먼저 발생할 수 있으므로 드라이버는 시작할 때 flag와 status 레지스터를 직접 읽어 초기 상태도 확인해야 한다.
 
-노란색 충전 LED를 제어하는 `STAT`도 open-drain 출력이며 충전 중 LOW다. 이는 nRF52840이 직접 구동하는 active-high LED 2개와 구분한다. 정확한 레지스터 기본값, 충전 전류 및 충전 전압은 펌웨어 작성 전에 BQ25628E 데이터시트와 회로도를 다시 대조한다.
+초기 펌웨어 정책은 다음과 같다.
+
+- I²C 주소 `0x6A`와 part number field `4`를 확인한 뒤에만 레지스터를 변경한다.
+- 입력 전류 제한은 500 mA로 두고, 3.3 kΩ ILIM 저항에 의한 약 0.76 A typical 하드웨어 제한도 계속 활성화한다.
+- 충전 전류 320 mA와 충전 전압 4.20 V는 BQ25628E POR 값과 같게 유지한다.
+- 5 V USB-C 입력을 전제로 6.3 V 입력 과전압 보호를 선택한다.
+- 호스트 watchdog은 비활성화하고 칩의 safety timer, TS 감시, thermal regulation과 termination 기본 기능은 변경하지 않는다.
+- ADC는 연속 변환 대신 9-bit one-shot으로만 실행해 배터리 동작 중 대기 전류 증가를 피한다.
+- `INT`가 누락되더라도 startup과 주기적 poll에서 read-to-clear flag, status와 fault를 읽는다. ADC 완료 인터럽트만 mask한다.
+- Ship/Shutdown은 일반 종료 경로에서 자동 실행하지 않고, 별도 확인을 거친 명시적 호출로만 요청한다.
+
+노란색 충전 LED를 제어하는 `STAT`도 open-drain 출력이며 충전 중 LOW다. 이는 nRF52840이 직접 구동하는 active-high LED 2개와 구분한다. BQ25628E는 배터리 유무를 신뢰성 있게 판별하는 전용 bit가 없으므로 ADC의 VBAT 값만으로 배터리 장착 여부나 잔량을 추정하지 않는다.
+
+320 mA/4.20 V는 칩 기본값을 다시 쓰는 초기 안전값일 뿐 최종 배터리 사양 검증을 대신하지 않는다. 실기기 충전 전에는 셀의 최대 충전 전압·허용 전류, ILIM 실측값, TS 네트워크, USB source 전압과 충전 온도를 확인한다.
 
 ## SGM6036-3.3
 

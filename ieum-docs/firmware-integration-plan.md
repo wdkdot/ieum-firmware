@@ -91,24 +91,24 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - 두 사용자 버튼은 외부 pull-up을 사용하며 active low로 공통 입력 기능에 연결했다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
 - MMA8652FC INT1은 P0.09에 직결하며 push-pull active high, latched interrupt로 설정했다. MCU 입력은 no-pull과 rising edge를 사용한다.
-- BQ25628E `INT`는 외부 pull-up된 open-drain active-low 256 µs pulse 입력으로 정의했다. TI 권장 pull-up은 10 kΩ이며, 인터럽트 처리는 BQ25628E 드라이버 추가 단계에서 구현한다.
+- BQ25628E `INT`는 외부 pull-up된 open-drain active-low 256 µs pulse 입력으로 정의했다. TI 권장 pull-up은 10 kΩ이며, ISR은 I²C를 사용하지 않고 전원 thread의 flag/status poll만 예약한다.
 - 부팅과 종료 시 GNSS UART 및 E-ink 신호 핀은 pull 없는 기본 입력 상태로 두고, 두 active-high EN은 LOW로 비활성화한다.
 
 빌드 성공은 부트로더 호환성, USB 복구, LoRa RF 동작 또는 전원 안전성을 검증하지 않는다. `wiscore_rak4631` 보드 설정 재사용은 실물 SWD·USB bring-up에서 확인해야 한다.
 
 ## 부품별 적용 방침
 
-| 부품 | 현재 지원 | 적용 방침 |
-|---|---|---|
-| RAK4630 / nRF52840 | 지원됨 | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성 |
-| SX1262 | 지원됨 | RAK4630 내부 연결과 RF switch/TCXO 설정 확인 |
-| AHT20-F | 지원됨 | 기존 AHT10/AHT20 환경 센서 드라이버 재사용 |
-| BMP388_TOKMAS | 지원됨 | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토 |
-| ATGM336H-5NR-32 | 지원됨 | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결 |
-| MMA8652FC | 초기 지원 | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ |
-| BQ25628E | 미지원 | 별도 power 드라이버와 Ieum 전원 관리자 추가 |
-| GDEY0266T90H / SSD1685 | 직접 지원 없음 | InkHUD용 패널 드라이버 추가 |
-| TPS22919-Q1 | GPIO 제어 가능 | E-ink 갱신 수명주기에 맞춰 전원 ON/OFF |
+| 부품                   | 현재 지원      | 적용 방침                                                                               |
+| ---------------------- | -------------- | --------------------------------------------------------------------------------------- |
+| RAK4630 / nRF52840     | 지원됨         | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성                        |
+| SX1262                 | 지원됨         | RAK4630 내부 연결과 RF switch/TCXO 설정 확인                                            |
+| AHT20-F                | 지원됨         | 기존 AHT10/AHT20 환경 센서 드라이버 재사용                                              |
+| BMP388_TOKMAS          | 지원됨         | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토                            |
+| ATGM336H-5NR-32        | 지원됨         | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결                                        |
+| MMA8652FC              | 초기 지원      | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ                     |
+| BQ25628E               | 초기 지원      | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
+| GDEY0266T90H / SSD1685 | 직접 지원 없음 | InkHUD용 패널 드라이버 추가                                                             |
+| TPS22919-Q1            | GPIO 제어 가능 | E-ink 갱신 수명주기에 맞춰 전원 ON/OFF                                                  |
 
 ## 기존 지원을 재사용하는 부품
 
@@ -162,7 +162,7 @@ src/power/BQ25628E.h
 src/power/BQ25628E.cpp
 ```
 
-초기 드라이버 범위:
+구현한 초기 드라이버 범위:
 
 - I²C 주소와 part ID 확인
 - USB 입력 전류 제한
@@ -173,7 +173,11 @@ src/power/BQ25628E.cpp
 - ship/shutdown 기능
 - 통신 실패 시 안전한 기본 동작 유지
 
-제품 포크 초기에는 `IEUM` 빌드에서만 생성되는 Ieum 전원 관리 계층으로 연결한다. 안정화 후 Meshtastic 공통 PMIC 구조로의 통합을 검토한다. 충전 설정값은 BQ25628E 데이터시트, 회로와 배터리 사양을 대조한 뒤 확정한다.
+제품 포크 초기에는 `IEUM` 빌드에서만 생성되는 Ieum 전원 관리 계층으로 연결한다. 주소 `0x6A`와 part number `4`를 확인하고, 16-bit 레지스터는 little-endian으로 처리한다. 읽기는 register address 뒤 repeated START를 사용하는 단일 transaction이며 START 사이에 100 µs 간격을 둔다. read-to-clear interrupt flag는 startup과 주기적 poll에서 읽고, ISR은 thread 실행만 예약한다.
+
+초기 설정은 입력 500 mA, 충전 320 mA/4.20 V, 6.3 V input OVP, 외부 ILIM 활성, watchdog 비활성이다. ADC는 bounded 9-bit one-shot으로 상태 갱신 때만 사용한다. 설정은 주기적으로 read-back해 adapter 제거로 초기화되는 입력 제한이나 예상하지 못한 reset을 복원한다. Ship/Shutdown API는 제공하지만 일반 종료에 연결하지 않는다. 통신 실패 시 칩의 autonomous charger 동작을 유지하며 LoRa, BLE와 USB 부팅을 막지 않는다.
+
+안정화 후 Meshtastic 공통 PMIC 구조로의 통합을 검토한다. 실기기 충전 전에는 배터리 최대 전압·전류와 TS 동작을 확인하고, ADC 정확도와 USB 입력 제한을 측정해 설정을 확정한다.
 
 ### GDEY0266T90H / SSD1685
 
