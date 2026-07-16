@@ -1,0 +1,43 @@
+name: Ieum CI
+
+on:
+  pull_request:
+    branches:
+      - ieum/main
+  push:
+    branches:
+      - ieum/main
+  workflow_dispatch:
+
+concurrency:
+  group: ieum-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Ieum firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-build-isolation "setuptools<72"
+          pip install --no-build-isolation platformio adafruit-nrfutil
+
+      - name: Build Ieum firmware
+        run: pio run -e ieum
