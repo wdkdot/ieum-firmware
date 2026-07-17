@@ -2,6 +2,8 @@
 
 #ifdef MESHTASTIC_INCLUDE_NICHE_GRAPHICS
 
+#include "mesh/Throttle.h"
+
 using namespace NicheGraphics::Drivers;
 
 // Separate from EInk::begin method, as derived class constructors can probably supply these parameters as constants
@@ -47,7 +49,7 @@ int32_t EInk::runOnce()
 {
     // Check for polling timeout
     // Manually set at 10 seconds, in case some big task holds up the firmware's cooperative multitasking
-    if (millis() - pollingBegunAt > 10000)
+    if (!Throttle::isWithinTimespanMs(pollingBegunAt, 10000))
         failed = true;
 
     // Handle failure
@@ -55,13 +57,25 @@ int32_t EInk::runOnce()
     // - other error (derived classes)
     if (failed) {
         LOG_WARN("Display update failed. Check wiring & power supply.");
+        abortUpdate();
+        updateRunning = false;
+        failed = false;
+        return disable();
+    }
+
+    bool updateDone = isUpdateDone();
+
+    // A derived driver may discover a timeout while checking its BUSY pin.
+    if (failed) {
+        LOG_WARN("Display update failed. Check wiring & power supply.");
+        abortUpdate();
         updateRunning = false;
         failed = false;
         return disable();
     }
 
     // If update not yet done
-    if (!isUpdateDone())
+    if (!updateDone)
         return pollingInterval; // Poll again in a few ms
 
     // If update done

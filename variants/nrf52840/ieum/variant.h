@@ -94,6 +94,18 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define PIN_EINK_BUSY (2) // P0.02
 #define PIN_EINK_EN (10)  // P0.10, active high
 #define IEUM_EINK_EN_PIN PIN_EINK_EN
+#define IEUM_EINK_EN_ACTIVE HIGH
+
+// Portrait InkHUD defaults. Rotation can be changed to 2 if final panel mounting is inverted.
+#ifndef IEUM_INKHUD_ROTATION
+#define IEUM_INKHUD_ROTATION 0
+#endif
+#ifndef IEUM_INKHUD_FAST_PER_FULL
+#define IEUM_INKHUD_FAST_PER_FULL 5
+#endif
+#ifndef IEUM_EINK_USE_PARTIAL_REFRESH
+#define IEUM_EINK_USE_PARTIAL_REFRESH 0
+#endif
 
 #define HAS_MMA8652FC
 #define IEUM_MOTION_INT_PIN (9) // P0.09, direct from MMA8652FC INT1

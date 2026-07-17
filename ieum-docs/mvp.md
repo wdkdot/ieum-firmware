@@ -35,14 +35,15 @@ MVP 병합 기준은 코드 검토, `pio run -e ieum`, 관련 정적 검사와 �
 - **구현됨**: 코드가 기능 브랜치에 있으나 아직 통합되지 않았다.
 - **빌드 확인**: `pio run -e ieum`이 성공했다.
 
-| 브랜치                                 | 끝 commit   | 현재 내용                                                                                                      | 판정                   |
-| -------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| `origin/ieum/main`                     | `d1e031c19` | 프로젝트 문서, `ieum` PlatformIO 환경, RAK4630/SX1262 및 외부 GPIO 정의, 부팅·종료 시 GNSS/E-ink rail 비활성화 | 통합됨                 |
-| `origin/codex/ieum-project-docs`       | `e69be6561` | `ieum-docs/` 하드웨어·통합 문서                                                                                | `ieum/main`에 통합됨   |
-| `origin/codex/ieum-board-support-base` | `6608e2b62` | 초기 Ieum variant와 GPIO active level 정리                                                                     | `ieum/main`에 통합됨   |
-| `origin/codex/ieum-board-support`      | `57cb77701` | 초기 MMA8652FC 탐지, 12비트 XYZ, motion IRQ와 오류 backoff                                                     | 후속 브랜치가 대체함   |
-| `origin/codex/mma8652fc-support`       | `3925fbeaa` | 위 motion 지원과 latched interrupt source 해제 수정                                                            | 구현됨, 빌드 확인      |
-| `origin/codex/ieum-actions-cleanup`    | `1b1027125` | upstream workflow 다수를 제거하고 `ieum_ci.yml`로 `pio run -e ieum` 실행                                       | 미통합, 범위 검토 필요 |
+| 브랜치                                 | 끝 commit   | 현재 내용                                                                                                      | 판정                           |
+| -------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `origin/ieum/main`                     | `d1e031c19` | 프로젝트 문서, `ieum` PlatformIO 환경, RAK4630/SX1262 및 외부 GPIO 정의, 부팅·종료 시 GNSS/E-ink rail 비활성화 | 통합됨                         |
+| `origin/codex/ieum-project-docs`       | `e69be6561` | `ieum-docs/` 하드웨어·통합 문서                                                                                | `ieum/main`에 통합됨           |
+| `origin/codex/ieum-board-support-base` | `6608e2b62` | 초기 Ieum variant와 GPIO active level 정리                                                                     | `ieum/main`에 통합됨           |
+| `origin/codex/ieum-board-support`      | `57cb77701` | 초기 MMA8652FC 탐지, 12비트 XYZ, motion IRQ와 오류 backoff                                                     | 후속 브랜치가 대체함           |
+| `origin/codex/mma8652fc-support`       | `3925fbeaa` | 위 motion 지원과 latched interrupt source 해제 수정                                                            | 구현됨, 빌드 확인              |
+| `origin/codex/ieum-actions-cleanup`    | `1b1027125` | upstream workflow 다수를 제거하고 `ieum_ci.yml`로 `pio run -e ieum` 실행                                       | 미통합, 범위 검토 필요         |
+| `codex/ieum-display`                   | 작업 중     | GDEY0266T90H InkHUD, 전체·빠른 갱신, opt-in 부분 갱신과 TPS22919 수명주기                                      | 구현됨, 빌드 확인, 실물 미검증 |
 
 원래 작업 브랜치였던 `codex/mma8652fc-support` 밖의 독립된 구현은 `codex/ieum-actions-cleanup`의 CI 정리다. 이 브랜치는 보드 variant가 들어오기 전 commit에서 갈라졌으므로 브랜치 전체를 병합하기보다, 삭제 범위를 검토한 뒤 필요한 CI commit만 최신 `ieum/main` 기반 브랜치로 옮기는 편이 안전하다.
 
@@ -58,7 +59,7 @@ MVP 병합 기준은 코드 검토, `pio run -e ieum`, 관련 정적 검사와 �
 |    4 | ATGM336H 수명주기              | 핀과 rail-off 초기화만 구현, `HAS_GPS=0` | 전원 ON/OFF, 안정화 timeout, UART attach/detach·high-Z와 fix 종료 경로 구현                 | `codex/ieum-gnss-power`        |
 |    5 | MMA8652FC                      | 기능 브랜치 구현 및 빌드 성공            | WHO_AM_I 0x4A, 12비트 XYZ, INT1 source/latch 처리와 I²C 오류 복구 코드 통합                 | 기존 `codex/mma8652fc-support` |
 |    6 | BQ25628E                       | 기능 브랜치 구현 및 빌드 성공            | 주소·part ID, status/fault/ADC, interrupt flag, watchdog와 데이터시트 기반 보수적 설정 구현 | `ieum/bq25628e-support`        |
-|    7 | GDEY0266T90H InkHUD            | 핀과 rail-off 초기화만 구현, 화면 비활성 | SSD1685 전체 갱신, BUSY timeout, deep sleep, GPIO high-Z와 TPS22919 수명주기 구현           | `codex/ieum-inkhud`            |
+|    7 | GDEY0266T90H InkHUD            | 기능 브랜치 구현 및 빌드 성공            | SSD1685 전체 갱신, BUSY timeout, deep sleep, GPIO high-Z와 TPS22919 수명주기 코드 통합      | `codex/ieum-display`           |
 |    8 | 소프트웨어 통합                | 미수행                                   | 모든 기능을 함께 빌드하고 주변장치 오류가 LoRa/BLE/USB 흐름을 막지 않도록 구성              | `codex/ieum-mvp-integration`   |
 
 CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작업이다. `codex/ieum-actions-cleanup`이 삭제하는 upstream workflow가 너무 넓으므로, 최소한 Ieum 빌드와 필요한 정적 검사만 남기는 정책을 별도 검토한 뒤 적용한다.
@@ -71,14 +72,15 @@ CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작
 - 실제 장착될 I²C 부품의 주소와 ID
 - ATGM336H-5NR-32의 baud rate, NMEA 설정, 전원 안정화 시간과 UART off-state
 - BQ25628E 주소·part ID는 데이터시트 기준으로 구현함. 배터리 최대 충전 전압·전류, 입력 제한 실측과 watchdog 비활성 정책은 실기기에서 확인
-- SSD1685 초기화·LUT·RAM 방향, BUSY/RESET/CS active level과 전원 안정화 시간
+- GDEY0266T90H 실제 조립 방향, 전원 안정화 시간과 온도별 BUSY 시간
+- SSD1685 빠른/부분 갱신의 잔상과 rail 재인가 후 부분 갱신 base-map 품질
 - GNSS와 E-ink 전원 차단 상태의 신호 pin 전압 및 역급전 전류
 
 위 항목이 불명확하면 상태를 `unknown`으로 기록하고, 회로도·데이터시트 또는 향후 실기기 측정 중 무엇이 필요한지 남긴다. 불명확한 주변장치가 부팅, LoRa, BLE 또는 USB 복구를 무한 대기하게 만들지 않는다.
 
 ## MVP 완료 체크리스트
 
-- [ ] `pio run -e ieum` 성공
+- [x] `pio run -e ieum` 성공
 - [ ] `trunk fmt` 통과
 - [ ] SWD와 USB 복구 구성을 코드와 문서에 반영
 - [ ] 기존 LoRa와 BLE 지원을 Ieum variant build에 포함
@@ -86,7 +88,7 @@ CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작
 - [ ] ATGM336H fix timeout·UART 격리·전원 수명주기 구현
 - [ ] MMA8652FC XYZ·INT1·latch 해제·오류 복구 구현
 - [x] BQ25628E 식별·상태·fault·보수적 충전 설정 구현
-- [ ] GDEY0266T90H 전체 갱신·BUSY timeout·deep sleep·rail-off 구현
+- [x] GDEY0266T90H 전체 갱신·BUSY timeout·deep sleep·rail-off 구현
 - [ ] 주변장치 실패가 LoRa, BLE와 USB 흐름을 막지 않도록 bounded wait 적용
 - [ ] 코드 검토와 빌드 확인을 마친 기능을 `ieum/main`에 순차 병합
 
@@ -101,7 +103,7 @@ CI 정리는 런타임 기능은 아니지만 병합 품질을 위한 선행 작
 - MMA8652FC Auto-WAKE/SLEEP, FIFO, 탭·방향·충격 기능
 - 움직임 상태에 따른 GNSS 측정 생략과 강제 갱신 정책
 - BMP388 forced-mode 저전력 최적화
-- E-ink 빠른/부분 갱신, 잔상 기준과 주기적 전체 갱신
+- E-ink 빠른/부분 갱신의 실물 품질, 잔상 기준과 전체 갱신 주기 조정
 - 버튼 2개와 LED 2개의 최종 UX 역할
 - 2-3주 배터리 목표 최적화
 - 제품 정책상 필요해질 때만 정식 Meshtastic HardwareModel 등록 검토
