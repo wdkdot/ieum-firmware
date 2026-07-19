@@ -24,20 +24,25 @@ void GDEY0266T90H::begin(SPIClass *spi, uint8_t pinDc, uint8_t pinCs, uint8_t pi
     pin_busy = pinBusy;
     pin_rst = pinRst;
 
-    if (!previousBuffer) {
-        previousBuffer = new uint8_t[bufferSize];
-        if (previousBuffer)
-            memset(previousBuffer, 0xFF, bufferSize);
-        else
-            LOG_WARN("GDEY0266T90H could not allocate previous framebuffer; partial refresh disabled");
-    }
-
     releasePins();
     setPower(false);
 }
 
 void GDEY0266T90H::setQuickUpdateMode(QuickUpdateMode mode)
 {
+    if (mode == QuickUpdateMode::PARTIAL && !previousBuffer) {
+        previousBuffer = new uint8_t[PANEL_BUFFER_SIZE];
+        if (!previousBuffer) {
+            LOG_WARN("GDEY0266T90H could not allocate previous framebuffer; using fast refresh");
+            quickUpdateMode = QuickUpdateMode::FAST;
+            hasPreviousBuffer = false;
+            return;
+        }
+
+        memset(previousBuffer, 0xFF, PANEL_BUFFER_SIZE);
+        hasPreviousBuffer = false;
+    }
+
     quickUpdateMode = mode;
 }
 
@@ -59,6 +64,12 @@ void GDEY0266T90H::update(uint8_t *imageData, UpdateTypes type)
     }
 
     startSession();
+    if (failed) {
+        abortUpdate();
+        failed = false;
+        return;
+    }
+
     reset();
     configScanning();
     configFullscreen();
