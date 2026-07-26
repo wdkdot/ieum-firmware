@@ -106,7 +106,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 | RAK4630 / nRF52840     | 지원됨    | 기존 nRF52 플랫폼과 RAK4631 variant를 기준으로 Ieum variant 작성                        |
 | SX1262                 | 지원됨    | RAK4630 내부 연결과 RF switch/TCXO 설정 확인                                            |
 | AHT20-F                | 지원됨    | 기존 AHT10/AHT20 환경 센서 드라이버 재사용                                              |
-| BMP388_TOKMAS          | 지원됨    | 기존 BMP3XX 드라이버로 시작하고 forced mode 절전은 후속 검토                            |
+| BMP388_TOKMAS          | 초기 지원 | `0x0D == 0x11` 전용 탐지와 Tokmas/SPA06 호환 command-mode 드라이버 사용                 |
 | ATGM336H-5NR-32        | 지원됨    | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결                                        |
 | MMA8652FC              | 초기 지원 | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ                     |
 | BQ25628E               | 초기 지원 | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
@@ -126,9 +126,9 @@ Meshtastic의 `src/modules/Telemetry/Sensor/AHT10.*`는 AHT10과 AHT20을 함께
 
 ### BMP388_TOKMAS
 
-`src/modules/Telemetry/Sensor/BMP3XXSensor.*`와 Adafruit BMP3XX 라이브러리를 재사용한다. 초기 bring-up에서는 기존 설정으로 측정 안정성을 확인한다.
+Tokmas 부품은 Bosch BMP388과 이름만 같고 레지스터 맵과 보정 계수 형식이 다르다. `0x0D == 0x11`을 `BMP388_TOKMAS`로 별도 탐지하고 `src/modules/Telemetry/Sensor/TokmasBMP388Sensor.*`를 사용한다.
 
-Ieum은 1분 간격 측정이므로 후속 단계에서 forced mode 단발 측정 후 sleep 전환을 검토한다. 가능하면 Ieum 전용 분기보다 BMP3XX 공통 저전력 기능으로 구현한다.
+드라이버는 온도와 압력을 8배 oversampling의 command mode로 각각 측정하고, `0x10`-`0x24`의 보정 계수와 Tokmas 보상식을 적용한다. 센서·계수 준비와 측정 완료에는 데이터시트 기준의 유한 timeout을 사용해 실패한 센서가 나머지 부팅을 막지 않게 한다. 실제 보드에서 AHT20과 함께 측정값 범위, 재부팅, 설정 저장과 장시간 안정성을 검증해야 한다.
 
 ### ATGM336H GNSS
 
@@ -250,7 +250,7 @@ Ieum 전용 `#ifdef`를 `GPS.cpp` 여러 위치에 넣기보다 motion 상태를
 1. Ieum variant와 SWD/USB 복구 경로
 2. RAK4630 LoRa 송수신과 BLE 연결
 3. I²C 스캔과 각 부품 식별
-4. 기존 AHT20/BMP388 telemetry
+4. 기존 AHT20과 Tokmas BMP388 telemetry
 5. 기존 ATGM336H GNSS와 전원 차단
 6. MMA8652FC 기본 XYZ와 인터럽트 드라이버
 7. BQ25628E 상태 읽기와 안전한 충전 설정

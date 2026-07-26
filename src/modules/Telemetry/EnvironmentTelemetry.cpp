@@ -118,6 +118,10 @@ extern void drawCommonHeader(OLEDDisplay *display, int16_t x, int16_t y, const c
 #include "Sensor/BMP3XXSensor.h"
 #endif
 
+#ifdef HAS_TOKMAS_BMP388
+#include "Sensor/TokmasBMP388Sensor.h"
+#endif
+
 #if __has_include(<Adafruit_PCT2075.h>)
 #include "Sensor/PCT2075Sensor.h"
 #endif
@@ -232,6 +236,9 @@ void EnvironmentTelemetryModule::i2cScanFinished(ScanI2C *i2cScanner)
 
 #if __has_include(<Adafruit_BMP3XX.h>)
     addSensor<BMP3XXSensor>(i2cScanner, ScanI2C::DeviceType::BMP_3XX);
+#endif
+#ifdef HAS_TOKMAS_BMP388
+    addSensor<TokmasBMP388Sensor>(i2cScanner, ScanI2C::DeviceType::BMP388_TOKMAS);
 #endif
 #if __has_include(<Adafruit_PCT2075.h>)
     addSensor<PCT2075Sensor>(i2cScanner, ScanI2C::DeviceType::PCT2075);
