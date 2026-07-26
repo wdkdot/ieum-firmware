@@ -294,6 +294,11 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
 #else
         err = i2cBus->endTransmission();
 #endif
+#ifdef HAS_MMA8652FC
+        if (addr.address == MMA8652FC_ADDR && err != 0) {
+            LOG_WARN("MMA8652FC did not acknowledge at 0x%02x on I2C port %d (error %u)", MMA8652FC_ADDR, port, err);
+        }
+#endif
         type = NONE;
         if (err == 0) {
             switch (addr.address) {
@@ -620,7 +625,15 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
 
                 break;
 
-                SCAN_SIMPLE_CASE(LSM6DS3_ADDR, LSM6DS3, "LSM6DS3", (uint8_t)addr.address);
+            case LSM6DS3_ADDR:
+#ifdef HAS_BQ25628E
+                // The Ieum charger uses this address and is identified by its dedicated power driver before the scan.
+                LOG_DEBUG("Skip LSM6DS3 enumeration at BQ25628E address 0x%x", (uint8_t)addr.address);
+#else
+                type = LSM6DS3;
+                logFoundDevice("LSM6DS3", (uint8_t)addr.address);
+#endif
+                break;
                 SCAN_SIMPLE_CASE(VEML7700_ADDR, VEML7700, "VEML7700", (uint8_t)addr.address);
             case TCA9555_ADDR:
                 registerValue = getRegisterValue(ScanI2CTwoWire::RegisterLocation(addr, 0x01), 1);
@@ -652,21 +665,33 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
                 SCAN_SIMPLE_CASE(MLX90632_ADDR, MLX90632, "MLX90632", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(NAU7802_ADDR, NAU7802, "NAU7802", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(MAX1704X_ADDR, MAX17048, "MAX17048", (uint8_t)addr.address);
-            case DFROBOT_RAIN_ADDR:
+            case DFROBOT_RAIN_ADDR: {
 #ifdef HAS_MMA8652FC
-                registerValue = getRegisterValue(ScanI2CTwoWire::RegisterLocation(addr, MMA8652FC_WHO_AM_I_REG), 1);
-                if (registerValue == MMA8652FC_WHO_AM_I_VALUE) {
+                i2cBus->beginTransmission(addr.address);
+                i2cBus->write(MMA8652FC_WHO_AM_I_REG);
+                err = i2cBus->endTransmission(false);
+                const uint8_t received = err == 0 ? i2cBus->requestFrom(addr.address, (uint8_t)1) : 0;
+                const bool readSucceeded = err == 0 && received == 1 && i2cBus->available();
+                if (readSucceeded) {
+                    registerValue = i2cBus->read();
+                }
+
+                if (!readSucceeded) {
+                    LOG_WARN("MMA8652FC WHO_AM_I read failed at 0x%02x (error %u, bytes %u)", MMA8652FC_ADDR, err,
+                             received);
+                } else if (registerValue == MMA8652FC_WHO_AM_I_VALUE) {
                     type = MMA8652FC;
                     logFoundDevice("MMA8652FC", (uint8_t)addr.address);
                 } else {
-                    type = DFROBOT_RAIN;
-                    logFoundDevice("DFRobot Rain Gauge", (uint8_t)addr.address);
+                    LOG_WARN("MMA8652FC unexpected WHO_AM_I 0x%02x at 0x%02x (expected 0x%02x)", registerValue,
+                             MMA8652FC_ADDR, MMA8652FC_WHO_AM_I_VALUE);
                 }
 #else
                 type = DFROBOT_RAIN;
                 logFoundDevice("DFRobot Rain Gauge", (uint8_t)addr.address);
 #endif
                 break;
+            }
                 SCAN_SIMPLE_CASE(LTR390UV_ADDR, LTR390UV, "LTR390UV", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(PCT2075_ADDR, PCT2075, "PCT2075", (uint8_t)addr.address);
                 SCAN_SIMPLE_CASE(SCD30_ADDR, SCD30, "SCD30", (uint8_t)addr.address);
