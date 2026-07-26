@@ -72,7 +72,7 @@ CI 정리는 PR #3으로 통합되었다. Ieum PR에서는 `pio run -e ieum`, Tr
 - 실제 장착될 I²C 부품의 주소와 ID
 - ATGM336H-5NR-32의 baud rate, NMEA 설정, 전원 안정화 시간과 UART off-state
 - BQ25628E 주소·part ID는 데이터시트 기준으로 구현함. 배터리 최대 충전 전압·전류, 입력 제한 실측과 watchdog 비활성 정책은 실기기에서 확인
-- GDEY0266T90H 실제 조립 방향, 전원 안정화 시간과 온도별 BUSY 시간
+- GDEY0266T90H 흑백 극성·가장자리·마지막 행/열, 전원 안정화 시간과 온도별 BUSY 시간
 - SSD1685 빠른/부분 갱신의 잔상과 rail 재인가 후 부분 갱신 base-map 품질
 - GNSS와 E-ink 전원 차단 상태의 신호 pin 전압 및 역급전 전류
 

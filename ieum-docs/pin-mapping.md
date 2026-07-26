@@ -51,7 +51,7 @@ Ieum의 `variant.cpp`는 RAK4631 variant와 동일하게 `g_ADigitalPinMap`을 `
 |      39 | `P0.31` / AIN7 |           31 | NC          |
 |      41 | `P0.04` / AIN2 |            4 | NC          |
 
-NC 핀은 variant에서 주변장치 기능에 배정하지 않는다.
+NC 핀은 일반 주변장치 기능에 배정하지 않는다. 단, P0.31은 PCB에 연결되지 않은 상태를 유지하면서 유효한 MISO 인덱스를 요구하는 nRF52 Arduino `SPIClass` 때문에 write-only E-ink `SPI1`의 dummy MISO로만 사용한다.
 
 ## USB와 디버그 신호
 

@@ -90,7 +90,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 공식 패널 자료에 따라 BUSY active high, RESET과 CS active low인 SSD1685 드라이버를 연결하고 InkHUD 빌드를 활성화했다.
 - 전체 갱신은 공식 `0xF4` 시퀀스, 빠른 갱신은 공식 1.5초 `0xC7` 시퀀스를 사용한다. 부분 갱신 `0x1C`도 구현했지만 실물 검증 전까지 variant 설정에서 비활성화한다.
 - 화면 갱신 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. BUSY timeout에도 명령 전송 없이 같은 전원 차단 경로를 사용한다.
-- 기본 UI는 184×360 세로 방향과 단일 InkHUD tile이다. 조립 방향이 반대이면 variant의 회전 기본값만 0에서 2로 변경한다.
+- 기본 UI는 184×360 세로 방향과 단일 InkHUD tile이다. 실기기에서 확인한 상하 반전은 GDEY0266T90H 드라이버의 행 역순 전송으로 보정한다.
 - 두 사용자 버튼은 외부 pull-up active low로 정의했다. InkHUD의 `prepareIeumButtons()`가 두 핀과 timing을 한곳에 모으지만, 역할 확정 전에는 handler 등록과 interrupt 시작을 하지 않는다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
 - MMA8652FC INT1은 P0.09에 직결하며 push-pull active high, latched interrupt로 설정했다. MCU 입력은 no-pull과 rising edge를 사용한다.
@@ -239,7 +239,7 @@ Ieum 전용 `#ifdef`를 `GPS.cpp` 여러 위치에 넣기보다 motion 상태를
 - AHT20, BMP388와 BQ25628E의 주소 선택 상태
 - GNSS 전원 안정화 시간과 UART off-state
 - E-ink 전원 안정화 시간과 PCB에서의 off-state 역급전 전류
-- E-ink 실제 조립 방향, 빠른/부분 갱신의 잔상과 온도별 BUSY 시간
+- E-ink 흑백 극성, 가장자리와 마지막 행/열, 빠른/부분 갱신의 잔상과 온도별 BUSY 시간
 - 버튼 2개의 최종 펌웨어 역할
 - LED 2개의 최종 펌웨어 역할
 - E-ink와 LoRa의 SPI bus 공유 여부

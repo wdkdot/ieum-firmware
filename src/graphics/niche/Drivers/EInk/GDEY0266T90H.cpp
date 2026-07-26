@@ -57,8 +57,7 @@ void GDEY0266T90H::update(uint8_t *imageData, UpdateTypes type)
     buffer = imageData;
     updateType = (type == FAST) ? FAST : FULL;
 
-    if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL &&
-        (!previousBuffer || !hasPreviousBuffer)) {
+    if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL && (!previousBuffer || !hasPreviousBuffer)) {
         LOG_INFO("GDEY0266T90H partial refresh needs a base frame; using full refresh");
         updateType = FULL;
     }
@@ -205,11 +204,36 @@ void GDEY0266T90H::configUpdateSequence()
         sendData(0xC7);
 }
 
+void GDEY0266T90H::sendImageBottomToTop(const uint8_t *image)
+{
+    constexpr uint16_t ROW_BYTES = PANEL_WIDTH / 8;
+    constexpr uint8_t ROWS_PER_CHUNK = 8;
+    uint8_t chunk[ROW_BYTES * ROWS_PER_CHUNK];
+    uint16_t sourceRow = PANEL_HEIGHT;
+
+    while (sourceRow > 0) {
+        const uint8_t rows = sourceRow > ROWS_PER_CHUNK ? ROWS_PER_CHUNK : static_cast<uint8_t>(sourceRow);
+
+        for (uint8_t row = 0; row < rows; row++) {
+            memcpy(chunk + (row * ROW_BYTES), image + ((sourceRow - 1 - row) * ROW_BYTES), ROW_BYTES);
+        }
+
+        sendData(chunk, rows * ROW_BYTES);
+        sourceRow -= rows;
+    }
+}
+
+void GDEY0266T90H::writeNewImage()
+{
+    sendCommand(0x24);
+    sendImageBottomToTop(buffer);
+}
+
 void GDEY0266T90H::writeOldImage()
 {
     if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL && previousBuffer && hasPreviousBuffer) {
         sendCommand(0x26);
-        sendData(previousBuffer, bufferSize);
+        sendImageBottomToTop(previousBuffer);
         return;
     }
 
