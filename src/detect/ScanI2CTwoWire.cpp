@@ -677,14 +677,13 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
                 }
 
                 if (!readSucceeded) {
-                    LOG_WARN("MMA8652FC WHO_AM_I read failed at 0x%02x (error %u, bytes %u)", MMA8652FC_ADDR, err,
-                             received);
+                    LOG_WARN("MMA8652FC WHO_AM_I read failed at 0x%02x (error %u, bytes %u)", MMA8652FC_ADDR, err, received);
                 } else if (registerValue == MMA8652FC_WHO_AM_I_VALUE) {
                     type = MMA8652FC;
                     logFoundDevice("MMA8652FC", (uint8_t)addr.address);
                 } else {
-                    LOG_WARN("MMA8652FC unexpected WHO_AM_I 0x%02x at 0x%02x (expected 0x%02x)", registerValue,
-                             MMA8652FC_ADDR, MMA8652FC_WHO_AM_I_VALUE);
+                    LOG_WARN("MMA8652FC unexpected WHO_AM_I 0x%02x at 0x%02x (expected 0x%02x)", registerValue, MMA8652FC_ADDR,
+                             MMA8652FC_WHO_AM_I_VALUE);
                 }
 #else
                 type = DFROBOT_RAIN;
