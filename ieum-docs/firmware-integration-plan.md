@@ -91,7 +91,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - 전체 갱신은 공식 `0xF4` 시퀀스, 빠른 갱신은 공식 1.5초 `0xC7` 시퀀스를 사용한다. 부분 갱신 `0x1C`도 구현했지만 실물 검증 전까지 variant 설정에서 비활성화한다.
 - 화면 갱신 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. BUSY timeout에도 명령 전송 없이 같은 전원 차단 경로를 사용한다.
 - 기본 UI는 184×360 세로 방향과 단일 InkHUD tile이다. 실기기에서 확인한 상하 반전은 GDEY0266T90H 드라이버의 행 역순 전송으로 보정한다.
-- 두 사용자 버튼은 외부 pull-up active low로 정의했다. InkHUD의 `prepareIeumButtons()`가 두 핀과 timing을 한곳에 모으지만, 역할 확정 전에는 handler 등록과 interrupt 시작을 하지 않는다.
+- 두 사용자 버튼은 외부 pull-up active low로 정의했다. 두 버튼 모두 InkHUD의 short/long press handler에 연결해 초기 안내 화면과 기본 UI를 조작하며, 보조 버튼의 최종 역할은 추후 분리한다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
 - MMA8652FC INT1은 P0.09에 직결하며 push-pull active high, latched interrupt로 설정했다. MCU 입력은 no-pull과 rising edge를 사용한다.
 - BQ25628E `INT`는 외부 pull-up된 open-drain active-low 256 µs pulse 입력으로 정의했다. TI 권장 pull-up은 10 kΩ이며, ISR은 I²C를 사용하지 않고 전원 thread의 flag/status poll만 예약한다.

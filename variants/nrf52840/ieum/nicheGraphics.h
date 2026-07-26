@@ -19,14 +19,18 @@ static void prepareIeumButtons(NicheGraphics::InkHUD::InkHUD *inkhud)
 {
     using namespace NicheGraphics;
 
-    (void)inkhud;
     Inputs::TwoButton *buttons = Inputs::TwoButton::getInstance();
     buttons->setWiring(0, IEUM_BUTTON1_PIN, false);
     buttons->setTiming(0, 50, 500);
+    buttons->setHandlerShortPress(0, [inkhud]() { inkhud->shortpress(); });
+    buttons->setHandlerLongPress(0, [inkhud]() { inkhud->longpress(); });
+
     buttons->setWiring(1, IEUM_BUTTON2_PIN, false);
     buttons->setTiming(1, 50, 500);
+    buttons->setHandlerShortPress(1, [inkhud]() { inkhud->shortpress(); });
+    buttons->setHandlerLongPress(1, [inkhud]() { inkhud->longpress(); });
 
-    // Button roles are intentionally unassigned. Add handlers here, then call start().
+    buttons->start();
 }
 
 void setupNicheGraphics()
