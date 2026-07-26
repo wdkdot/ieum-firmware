@@ -59,10 +59,10 @@ extern "C" {
 
 // SPI0 is internal to the RAK4630 SX1262. SPI1 is wired to the E-ink panel.
 #define SPI_INTERFACES_COUNT 2
-#define PIN_SPI_MISO (45) // P1.13
-#define PIN_SPI_MOSI (44) // P1.12
-#define PIN_SPI_SCK (43)  // P1.11
-#define PIN_SPI1_MISO (-1)
+#define PIN_SPI_MISO (45)  // P1.13
+#define PIN_SPI_MOSI (44)  // P1.12
+#define PIN_SPI_SCK (43)   // P1.11
+#define PIN_SPI1_MISO (31) // P0.31, PCB NC; dummy MISO for write-only E-ink SPI
 #define PIN_SPI1_MOSI (30) // P0.30, SPI_MOSI
 #define PIN_SPI1_SCK (3)   // P0.03, SPI_SCK
 
@@ -96,7 +96,7 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define IEUM_EINK_EN_PIN PIN_EINK_EN
 #define IEUM_EINK_EN_ACTIVE HIGH
 
-// Portrait InkHUD defaults. Rotation can be changed to 2 if final panel mounting is inverted.
+// Portrait InkHUD defaults. Panel row order is corrected in the GDEY0266T90H driver.
 #ifndef IEUM_INKHUD_ROTATION
 #define IEUM_INKHUD_ROTATION 0
 #endif

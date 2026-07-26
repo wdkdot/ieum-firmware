@@ -26,6 +26,7 @@ Ieum 펌웨어는 Meshtastic의 InkHUD를 사용한다. `GDEY0266T90H` 전용 �
 
 - 184×360, 행당 23 byte, 총 8,280 byte인 1-bit InkHUD 프레임버퍼
 - InkHUD 회전 0/1/2/3 지원과 Ieum 기본 세로 방향 `IEUM_INKHUD_ROTATION=0`
+- Ieum 패널 장착 방향에 맞춘 프레임버퍼 행 역순 전송
 - 제조사 예제와 일치하는 SSD1685 초기화 및 전체 갱신 명령
 - 설정 단계 5초, 실제 화면 갱신 단계 9초의 bounded BUSY timeout
 - 전체 갱신 완료 후 `0x10, 0x01` deep sleep과 제조사 예제의 100 ms 대기
@@ -34,11 +35,13 @@ Ieum 펌웨어는 Meshtastic의 InkHUD를 사용한다. `GDEY0266T90H` 전용 �
 - 부분 갱신을 선택할 때만 이전 프레임을 MCU RAM에 보존하는 전체 화면 부분 갱신 구현
 - 두 버튼의 배선과 debounce/long-press 설정 위치를 한 함수에 모으되, 역할 확정 전에는 handler와 IRQ를 시작하지 않음
 
-`pio run -e ieum` 빌드는 확인했다. 이 상태는 명령 시퀀스와 펌웨어 연결을 검증한 것이며, 실제 패널 방향, 영상 품질, BUSY 시간, 잔상, off-state 역급전 전류는 아직 검증하지 않았다.
+`pio run -e ieum` 빌드는 확인했다. 실기기에서 행 역순 전송 후 UI 상하 방향이 정상임을 확인했으며, 영상 품질, BUSY 시간, 잔상, off-state 역급전 전류는 아직 검증하지 않았다.
 
 ## 하드웨어 구성
 
 RAK4630의 SPI와 제어 신호가 패널에 연결된다. E-ink 전원은 TPS22919QDCKRQ1을 통과하며, 패널 구동에 필요한 다이오드, 인덕터 및 커패시터가 외부 보조 전원 회로를 구성한다.
+
+패널은 write-only SPI를 사용하지만 nRF52 Arduino `SPIClass`는 MISO에도 유효한 variant 핀 인덱스를 요구한다. Ieum은 PCB에 연결되지 않은 P0.31을 `SPI1_MISO`의 dummy 핀으로 사용한다.
 
 정확한 SPI 핀, CS, DC, RESET, BUSY 및 로드 스위치 EN은 핀맵 문서에서 다룬다. 과거 ESP32 테스트 핀 번호를 최종 PCB 핀으로 사용하면 안 된다.
 
@@ -83,7 +86,7 @@ RAK4630의 SPI와 제어 신호가 패널에 연결된다. E-ink 전원은 TPS22
 
 nRF52840의 256 KB RAM에서는 전체 1비트 프레임버퍼를 유지할 수 있지만, Meshtastic의 기존 디스플레이 추상화와 버퍼 형식을 우선 재사용한다.
 
-InkHUD Renderer는 행 우선, 왼쪽 픽셀이 각 byte의 MSB인 형식으로 이 버퍼를 만든다. 드라이버는 제조사 normal 방향인 Y=359에서 Y=0으로 쓰며, UI 방향은 RAM 쓰기 순서를 바꾸지 않고 InkHUD 좌표 회전으로 처리한다. 기본값은 184×360 세로 UI이며, 실제 조립 방향이 뒤집혀 있으면 `IEUM_INKHUD_ROTATION`만 0에서 2로 바꾸면 된다.
+InkHUD Renderer는 행 우선, 왼쪽 픽셀이 각 byte의 MSB인 형식으로 이 버퍼를 만든다. SSD1685는 첫 프레임버퍼 행을 Y=359에 쓰므로 버퍼를 그대로 전송하면 Ieum 장착 방향에서 화면이 상하 반전된다. 드라이버는 행 359부터 행 0까지 역순으로 전송해 이를 보정하며 좌우 방향은 바꾸지 않는다. InkHUD 기본 회전값은 184×360 세로 UI의 `0`을 유지한다.
 
 `IEUM_EINK_USE_PARTIAL_REFRESH=1`로 부분 갱신을 선택할 때만 드라이버가 이전 프레임용 8,280 byte를 추가로 할당한다. 기본 FAST 모드의 화면 관련 RAM은 InkHUD 현재 프레임 8,280 byte이며, 부분 갱신 모드에서는 이전 프레임을 포함해 합계 16,560 byte다. 추가 버퍼 할당에 실패하면 드라이버는 제조사 FAST 모드로 되돌아간다.
 
@@ -108,6 +111,6 @@ InkHUD Renderer는 행 우선, 왼쪽 픽셀이 각 byte의 MSB인 형식으로 
 - 화면 유지에는 전력이 필요하지 않으므로 단순 상태 변화마다 갱신하지 않는다.
 - 0.3초 부분 갱신과 1.5초 빠른 갱신 수치는 25 °C 제조사 시험값이므로 실제 케이스와 온도에서 다시 측정한다.
 - 향후 패널 변경 시 컨트롤러와 LUT, 해상도, 픽셀 형식을 다시 확인한다.
-- 실제 기기에서 0°/180° 조립 방향, 흑백 극성, 가장자리와 마지막 행/열을 시험 패턴으로 확인한다.
+- 실기기에서 행 역순 전송 후 UI 상하 방향이 정상임을 확인했다. 흑백 극성, 가장자리와 마지막 행/열은 시험 패턴으로 추가 확인한다.
 - timeout 경로에서 LoRa, BLE와 USB가 계속 동작하고 EINK_EN이 LOW로 복귀하는지 확인한다.
 - deep sleep 뒤 SCLK, MOSI, CS, DC, RESET, BUSY의 off-state 전압과 패널 rail 전류를 측정한다.

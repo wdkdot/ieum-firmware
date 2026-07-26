@@ -28,8 +28,7 @@ class GDEY0266T90H : public SSD16XX
         PARTIAL,
     };
 
-    GDEY0266T90H(uint8_t pinPower = 0xFF, bool powerActiveHigh = true, uint8_t pinSclk = 0xFF,
-                 uint8_t pinMosi = 0xFF);
+    GDEY0266T90H(uint8_t pinPower = 0xFF, bool powerActiveHigh = true, uint8_t pinSclk = 0xFF, uint8_t pinMosi = 0xFF);
 
     void begin(SPIClass *spi, uint8_t pinDc, uint8_t pinCs, uint8_t pinBusy, uint8_t pinRst = 0xFF) override;
     void update(uint8_t *imageData, UpdateTypes type) override;
@@ -42,6 +41,7 @@ class GDEY0266T90H : public SSD16XX
     void configScanning() override;
     void configWaveform() override;
     void configUpdateSequence() override;
+    void writeNewImage() override;
     void writeOldImage() override;
     void detachFromUpdate() override;
     bool isUpdateDone() override;
@@ -62,6 +62,7 @@ class GDEY0266T90H : public SSD16XX
     void finishSession(bool enterDeepSleep);
     void setPower(bool enabled);
     void releasePins();
+    void sendImageBottomToTop(const uint8_t *image);
     void writeZeroPlane();
 
     QuickUpdateMode quickUpdateMode = QuickUpdateMode::FAST;
