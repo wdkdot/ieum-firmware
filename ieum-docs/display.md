@@ -100,7 +100,7 @@ InkHUD Renderer는 행 우선, 왼쪽 픽셀이 각 byte의 MSB인 형식으로 
 
 ## 버튼 준비
 
-`prepareIeumButtons()`가 두 active-low 외부 pull-up 버튼의 핀과 50 ms debounce, 500 ms long-press 기준을 한곳에서 설정한다. 역할을 추측하지 않기 위해 handler 등록과 `buttons->start()`는 아직 호출하지 않는다. 역할이 확정되면 이 함수에 InkHUD handler를 연결하고 `start()` 한 줄을 추가하면 된다.
+`prepareIeumButtons()`가 두 active-low 외부 pull-up 버튼의 핀과 50 ms debounce, 500 ms long-press 기준을 설정한다. 두 버튼 모두 짧게 누르면 InkHUD `shortpress()`, 길게 누르면 `longpress()`를 호출하며, 초기 안내 화면을 어느 버튼으로도 진행할 수 있다. 최종 UX가 확정되면 보조 버튼의 역할을 별도로 분리한다.
 
 ## 펌웨어 주의점
 

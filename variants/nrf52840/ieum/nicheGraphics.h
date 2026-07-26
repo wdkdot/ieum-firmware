@@ -19,22 +19,25 @@ static void prepareIeumButtons(NicheGraphics::InkHUD::InkHUD *inkhud)
 {
     using namespace NicheGraphics;
 
-    (void)inkhud;
     Inputs::TwoButton *buttons = Inputs::TwoButton::getInstance();
     buttons->setWiring(0, IEUM_BUTTON1_PIN, false);
     buttons->setTiming(0, 50, 500);
+    buttons->setHandlerShortPress(0, [inkhud]() { inkhud->shortpress(); });
+    buttons->setHandlerLongPress(0, [inkhud]() { inkhud->longpress(); });
+
     buttons->setWiring(1, IEUM_BUTTON2_PIN, false);
     buttons->setTiming(1, 50, 500);
+    buttons->setHandlerShortPress(1, [inkhud]() { inkhud->shortpress(); });
+    buttons->setHandlerLongPress(1, [inkhud]() { inkhud->longpress(); });
 
-    // Button roles are intentionally unassigned. Add handlers here, then call start().
+    buttons->start();
 }
 
 void setupNicheGraphics()
 {
     using namespace NicheGraphics;
 
-    auto *driver = new Drivers::GDEY0266T90H(IEUM_EINK_EN_PIN, IEUM_EINK_EN_ACTIVE == HIGH, PIN_EINK_SCLK,
-                                              PIN_EINK_MOSI);
+    auto *driver = new Drivers::GDEY0266T90H(IEUM_EINK_EN_PIN, IEUM_EINK_EN_ACTIVE == HIGH, PIN_EINK_SCLK, PIN_EINK_MOSI);
 
 #if IEUM_EINK_USE_PARTIAL_REFRESH
     driver->setQuickUpdateMode(Drivers::GDEY0266T90H::QuickUpdateMode::PARTIAL);
