@@ -108,6 +108,7 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #endif
 
 #define HAS_MMA8652FC
+#define HAS_TOKMAS_BMP388
 #define IEUM_MOTION_INT_PIN (9) // P0.09, direct from MMA8652FC INT1
 #define MMA8652FC_INT_PIN IEUM_MOTION_INT_PIN
 #define MMA8652FC_INT_ACTIVE HIGH

@@ -20,18 +20,18 @@ The original detailed agent guidance remains canonical for shared Meshtastic beh
 
 Relevant upstream paths:
 
-| Path | Purpose |
-| --- | --- |
-| `src/` | Shared firmware implementation |
-| `src/gps/` | GNSS framework and device handling |
-| `src/graphics/niche/InkHUD/` | E-ink user interface |
-| `src/graphics/niche/Drivers/EInk/` | InkHUD panel drivers |
-| `src/modules/Telemetry/Sensor/` | Environmental sensor drivers |
-| `src/motion/` | Motion sensor support |
-| `src/power/` | Power and PMIC support |
-| `src/platform/nrf52/` | Shared nRF52 platform code |
-| `variants/nrf52840/` | nRF52840 board definitions |
-| `src/mesh/generated/` | Generated protobuf code; never edit directly |
+| Path                               | Purpose                                      |
+| ---------------------------------- | -------------------------------------------- |
+| `src/`                             | Shared firmware implementation               |
+| `src/gps/`                         | GNSS framework and device handling           |
+| `src/graphics/niche/InkHUD/`       | E-ink user interface                         |
+| `src/graphics/niche/Drivers/EInk/` | InkHUD panel drivers                         |
+| `src/modules/Telemetry/Sensor/`    | Environmental sensor drivers                 |
+| `src/motion/`                      | Motion sensor support                        |
+| `src/power/`                       | Power and PMIC support                       |
+| `src/platform/nrf52/`              | Shared nRF52 platform code                   |
+| `variants/nrf52840/`               | nRF52840 board definitions                   |
+| `src/mesh/generated/`              | Generated protobuf code; never edit directly |
 
 ## Version and branch policy
 
@@ -48,16 +48,16 @@ Relevant upstream paths:
 
 ## Confirmed Ieum hardware
 
-| Function | Device | Direction |
-| --- | --- | --- |
-| MCU and LoRa | RAK4630 (`nRF52840` + `SX1262`) | Reuse existing nRF52 and RAK4631 support where electrically compatible |
-| Display | Good Display `GDEY0266T90H`, 2.66-inch, 184 x 360, monochrome, `SSD1685` | Add an InkHUD panel driver |
-| Display load switch | `TPS22919QDCKRQ1` | Power the panel only during display operations |
-| GNSS | `ATGM336H-5NR-32` | Reuse GNSS framework; add Ieum power and UART lifecycle |
-| Temperature/humidity | `AHT20-F` | Reuse the AHT10/AHT20 telemetry driver first |
-| Pressure | `BMP388_TOKMAS` | Reuse the BMP3XX telemetry driver first |
-| Motion | `MMA8652FC` | Add a reusable motion driver |
-| Charger and PMIC | `BQ25628E` | Add conservative, datasheet-verified power support |
+| Function             | Device                                                                   | Direction                                                                                |
+| -------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| MCU and LoRa         | RAK4630 (`nRF52840` + `SX1262`)                                          | Reuse existing nRF52 and RAK4631 support where electrically compatible                   |
+| Display              | Good Display `GDEY0266T90H`, 2.66-inch, 184 x 360, monochrome, `SSD1685` | Add an InkHUD panel driver                                                               |
+| Display load switch  | `TPS22919QDCKRQ1`                                                        | Power the panel only during display operations                                           |
+| GNSS                 | `ATGM336H-5NR-32`                                                        | Reuse GNSS framework; add Ieum power and UART lifecycle                                  |
+| Temperature/humidity | `AHT20-F`                                                                | Reuse the AHT10/AHT20 telemetry driver first                                             |
+| Pressure             | `BMP388_TOKMAS`                                                          | Use the dedicated Tokmas/SPA06-compatible telemetry driver; Bosch BMP3XX is incompatible |
+| Motion               | `MMA8652FC`                                                              | Add a reusable motion driver                                                             |
+| Charger and PMIC     | `BQ25628E`                                                               | Add conservative, datasheet-verified power support                                       |
 
 The final GPIO map, active levels, pull configuration, shared-bus details, and power stabilization delays are not yet authoritative. Never infer them from ESP32 sample code, a similar RAK board, or a generic module datasheet. Verify them against the final Ieum schematic, pin map, component documentation, and real hardware.
 

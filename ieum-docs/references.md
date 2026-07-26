@@ -12,7 +12,8 @@
 ## 센서
 
 - [ASAIR AHT20 Datasheet](https://www.aosong.com/userfiles/files/media/Data%20Sheet%20AHT20.pdf)
-- [Bosch Sensortec BMP388 Datasheet](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp388-ds001.pdf)
+- [Tokmas BMP388 Datasheet, LCSC C54582187](https://datasheet.lcsc.com/datasheet/pdf/e156d137bd51fe206f617940366f250a.pdf?productCode=C54582187)
+- [Bosch Sensortec BMP388 Datasheet, 비교용](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp388-ds001.pdf)
 - [NXP MMA8652FC Datasheet, Rev. 3.3](https://www.nxp.com/docs/en/data-sheet/MMA8652FC.pdf)
 - [NXP MMA8653FC Datasheet, 비교용](https://www.nxp.com/docs/en/data-sheet/MMA8653FC.pdf)
 

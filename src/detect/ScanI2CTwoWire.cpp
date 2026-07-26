@@ -394,8 +394,14 @@ void ScanI2CTwoWire::scanPort(I2CPort port, uint8_t *address, uint8_t asize)
                         logFoundDevice("DPS310", (uint8_t)addr.address);
                         type = DPS310;
                         break;
+#ifdef HAS_TOKMAS_BMP388
+                    case 0x11:
+                        logFoundDevice("BMP388(TOKMAS)", (uint8_t)addr.address);
+                        type = BMP388_TOKMAS;
+                        break;
+#endif
                     }
-                    if (type == DPS310) {
+                    if (type != NONE) {
                         break;
                     }
                 default:
