@@ -220,6 +220,7 @@ void InkHUD::WindowManager::nextApplet()
         return;
 
     // Hide old applet, show new applet
+    inkhud->extendAppletSwitchSession();
     t->getAssignedApplet()->sendToBackground();
     t->assignApplet(nextValidApplet);
     nextValidApplet->bringToForeground();
@@ -273,6 +274,7 @@ void InkHUD::WindowManager::prevApplet()
         return;
 
     // Hide old applet, show new applet
+    inkhud->extendAppletSwitchSession();
     t->getAssignedApplet()->sendToBackground();
     t->assignApplet(prevValidApplet);
     prevValidApplet->bringToForeground();

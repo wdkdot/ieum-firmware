@@ -32,7 +32,8 @@ class GDEY0266T90H : public SSD16XX
 
     void begin(SPIClass *spi, uint8_t pinDc, uint8_t pinCs, uint8_t pinBusy, uint8_t pinRst = 0xFF) override;
     void update(uint8_t *imageData, UpdateTypes type) override;
-    void setInteractiveMode(bool enabled) override;
+    void setInteractiveMode(bool enabled, bool requireFullBase = true) override;
+    void closeInteractiveMode() override;
     void setQuickUpdateMode(QuickUpdateMode mode);
 
   protected:
@@ -73,6 +74,7 @@ class GDEY0266T90H : public SSD16XX
     bool sessionActive = false;
     bool interactiveMode = false;
     bool interactiveSessionPrepared = false;
+    bool interactiveBaseRefreshRequired = true;
     bool interactiveExitPending = false;
     bool keepSessionAfterUpdate = false;
     uint32_t refreshStartedAt = 0;

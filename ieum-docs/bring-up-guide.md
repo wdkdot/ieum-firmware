@@ -71,6 +71,7 @@
 - 전체 갱신과 빠른 갱신 시간 측정
 - 일반 화면 `F7/DC/01`과 메뉴 `F4/1C/01`에서 BUSY 시간 비교
 - 메뉴 진입 전체 갱신 뒤 연속 버튼 입력이 reset 없이 부분 갱신되는지 확인
+- Applet 연속 전환이 첫 `DC` 뒤 5초 동안 `1C`를 재사용하고 유휴 종료 시 추가 갱신 없이 rail을 끄는지 확인
 - 메뉴 종료·timeout·shutdown 뒤 deep sleep, GPIO high-Z와 EINK_EN LOW 복귀 확인
 - 부분 갱신을 연속 반복해 잔상 누적 시점과 전체 갱신 복구 확인
 - BUSY를 의도적으로 active 상태로 만들어 timeout 뒤 EINK_EN LOW와 LoRa/BLE/USB 생존 확인

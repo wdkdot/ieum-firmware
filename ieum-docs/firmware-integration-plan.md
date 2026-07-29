@@ -89,7 +89,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - GNSS EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 전원 안정화 시간이 미확정이므로 `HAS_GPS=0`은 유지한다.
 - E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 공식 패널 자료에 따라 BUSY active high, RESET과 CS active low인 SSD1685 드라이버를 연결하고 InkHUD 빌드를 활성화했다.
 - 일반 화면은 검증 예제의 프로필 3인 전체 `0xF7`, 부분 `0xDC`, white border `0x01`을 사용한다. 메뉴 안에서는 `0xF4` 기준 프레임 뒤 reset과 전원 차단 없이 `0x1C` 부분 갱신을 이어서 사용한다. 빠른 갱신 fallback은 공식 1.5초 `0xC7` 시퀀스다.
-- 일반 화면 갱신과 메뉴 종료 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. 메뉴가 열린 동안에는 다음 입력을 위해 패널 세션을 유지한다. BUSY timeout에는 추가 명령 전송 없이 즉시 전원 차단 경로를 사용한다.
+- 일반 화면 갱신과 메뉴 종료 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. 메뉴가 열린 동안에는 다음 입력을 위해 패널 세션을 유지한다. Applet 전환도 마지막 입력부터 5초 동안 세션을 유지하고, 유휴 종료 시 추가 갱신 없이 전원을 정리한다. BUSY timeout에는 추가 명령 전송 없이 즉시 전원 차단 경로를 사용한다.
 - 기본 UI는 184×360 세로 방향과 단일 InkHUD tile이다. 실기기에서 확인한 상하 반전은 GDEY0266T90H 드라이버의 행 역순 전송으로 보정한다.
 - 두 사용자 버튼은 외부 pull-up active low로 정의했다. 두 버튼 모두 InkHUD의 short/long press handler에 연결해 초기 안내 화면과 기본 UI를 조작하며, 보조 버튼의 최종 역할은 추후 분리한다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
@@ -209,7 +209,7 @@ variants/nrf52840/ieum/nicheGraphics.h
 7. SPI와 제어 핀을 역급전 방지 상태로 전환한다.
 8. TPS22919를 끈다.
 
-현재 일반 화면은 검증 예제의 프로필 3인 `0x22=0xF7` 전체 갱신과 `0x22=0xDC` 부분 갱신, `0x3C=0x01` white border를 사용한다. 프로필 4의 `0xC0` Hi-Z는 Ieum 패널에서 VBD 가장자리가 검게 남아 제외했다. 메뉴 진입 시 `0xF4` 전체 갱신으로 기준 프레임과 구동 회로를 준비하고, 메뉴 안의 후속 갱신은 rail과 SPI를 유지한 채 reset 없이 `0x1C`를 사용한다. 메뉴 종료 시 `0xF7` 전체 갱신 후 deep sleep과 TPS22919 OFF를 수행한다. 부분 갱신은 이전 프레임을 MCU에 보존해 `0x26` base plane을 복원하고 `0x21=0x00,0x40`으로 RAM 극성과 184-source 모드를 명시한다. 초기 시험에서 5회마다 전체 갱신을 강제할 필요는 없었으므로 고정 횟수 정책은 두지 않고, InkHUD display-health maintenance와 장기 잔상 측정 결과에 따라 전체 갱신을 수행한다.
+현재 일반 화면은 검증 예제의 프로필 3인 `0x22=0xF7` 전체 갱신과 `0x22=0xDC` 부분 갱신, `0x3C=0x01` white border를 사용한다. 프로필 4의 `0xC0` Hi-Z는 Ieum 패널에서 VBD 가장자리가 검게 남아 제외했다. 메뉴 진입 시 `0xF4` 전체 갱신으로 기준 프레임과 구동 회로를 준비하고, 메뉴 안의 후속 갱신은 rail과 SPI를 유지한 채 reset 없이 `0x1C`를 사용한다. 메뉴 종료 시 `0xF7` 전체 갱신 후 deep sleep과 TPS22919 OFF를 수행한다. Applet 전환은 첫 `0xDC` 뒤 5초 동안 같은 세션의 `0x1C`를 재사용하며, 유휴 종료는 추가 갱신 없이 deep sleep과 TPS22919 OFF만 수행한다. 부분 갱신은 이전 프레임을 MCU에 보존해 `0x26` base plane을 복원하고 `0x21=0x00,0x40`으로 RAM 극성과 184-source 모드를 명시한다. 초기 시험에서 5회마다 전체 갱신을 강제할 필요는 없었으므로 고정 횟수 정책은 두지 않고, InkHUD display-health maintenance와 장기 잔상 측정 결과에 따라 전체 갱신을 수행한다.
 
 ## 움직임 기반 GNSS 정책
 

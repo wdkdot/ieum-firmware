@@ -41,6 +41,7 @@ class Renderer : protected concurrency::OSThread
     void forceUpdate(Drivers::EInk::UpdateTypes type = Drivers::EInk::UpdateTypes::UNSPECIFIED, bool all = false,
                      bool async = true); // Update display, regardless of whether any applets requested this
     void setInteractiveMode(bool enabled);
+    void extendAppletSwitchSession();
 
     // Wait for an update to complete
     void awaitUpdate();
@@ -88,6 +89,11 @@ class Renderer : protected concurrency::OSThread
     bool requested = false;
     bool forced = false;
     bool renderAll = false;
+    bool persistentInteractiveMode = false;
+    bool appletSwitchSessionActive = false;
+    uint32_t appletSwitchSessionStartedAt = 0;
+
+    static constexpr uint32_t APPLET_SWITCH_IDLE_TIMEOUT_MS = 5000;
 
     // For convenience
     InkHUD *inkhud = nullptr;

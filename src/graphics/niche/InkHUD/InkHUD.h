@@ -98,6 +98,7 @@ class InkHUD
     void forceUpdate(Drivers::EInk::UpdateTypes type = Drivers::EInk::UpdateTypes::UNSPECIFIED, bool all = false,
                      bool async = true);
     void setDisplayInteractive(bool enabled);
+    void extendAppletSwitchSession();
     void awaitUpdate();
 
     // (Re)configuring WindowManager
