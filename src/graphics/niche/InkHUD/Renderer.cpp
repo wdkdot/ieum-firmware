@@ -3,6 +3,7 @@
 #include "./Renderer.h"
 
 #include "main.h"
+#include "mesh/Throttle.h"
 
 #include "./Applet.h"
 #include "./SystemApplet.h"
@@ -102,6 +103,38 @@ void InkHUD::Renderer::forceUpdate(Drivers::EInk::UpdateTypes type, bool all, bo
         render(false);
 }
 
+void InkHUD::Renderer::setInteractiveMode(bool enabled)
+{
+    if (enabled) {
+        persistentInteractiveMode = true;
+        appletSwitchSessionActive = false;
+        driver->setInteractiveMode(true, true);
+        return;
+    }
+
+    persistentInteractiveMode = false;
+    if (appletSwitchSessionActive) {
+        awaitUpdate();
+        driver->closeInteractiveMode();
+        appletSwitchSessionActive = false;
+        return;
+    }
+
+    driver->setInteractiveMode(false);
+}
+
+void InkHUD::Renderer::extendAppletSwitchSession()
+{
+    if (persistentInteractiveMode)
+        return;
+
+    appletSwitchSessionActive = true;
+    appletSwitchSessionStartedAt = millis();
+    driver->setInteractiveMode(true, false);
+    OSThread::setIntervalFromNow(APPLET_SWITCH_IDLE_TIMEOUT_MS);
+    OSThread::enabled = true;
+}
+
 // Wait for any in-progress display update to complete before continuing
 void InkHUD::Renderer::awaitUpdate()
 {
@@ -146,6 +179,15 @@ uint16_t InkHUD::Renderer::height()
 // - queuing another render: while one is already is progress
 int32_t InkHUD::Renderer::runOnce()
 {
+    if (appletSwitchSessionActive &&
+        !Throttle::isWithinTimespanMs(appletSwitchSessionStartedAt, APPLET_SWITCH_IDLE_TIMEOUT_MS)) {
+        if (driver->busy())
+            return 50UL;
+
+        driver->closeInteractiveMode();
+        appletSwitchSessionActive = false;
+    }
+
     // If an applet asked to render, and hardware is able, lets try now
     if (requested && !driver->busy()) {
         render();
@@ -155,8 +197,13 @@ int32_t InkHUD::Renderer::runOnce()
     // otherwise, stop our thread until next update due
     if (requested)
         return 250UL;
-    else
-        return OSThread::disable();
+
+    if (appletSwitchSessionActive) {
+        const uint32_t elapsed = millis() - appletSwitchSessionStartedAt;
+        return APPLET_SWITCH_IDLE_TIMEOUT_MS - elapsed;
+    }
+
+    return OSThread::disable();
 }
 
 // Applies the system-wide rotation to pixel positions

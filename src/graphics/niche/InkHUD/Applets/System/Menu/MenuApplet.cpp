@@ -59,6 +59,8 @@ InkHUD::MenuApplet::MenuApplet() : concurrency::OSThread("MenuApplet")
 
 void InkHUD::MenuApplet::onForeground()
 {
+    inkhud->setDisplayInteractive(true);
+
     // We do need this before we render, but we can optimize by just calculating it once now
     systemInfoPanelHeight = getSystemInfoPanelHeight();
 
@@ -98,6 +100,8 @@ void InkHUD::MenuApplet::onForeground()
 
 void InkHUD::MenuApplet::onBackground()
 {
+    inkhud->setDisplayInteractive(false);
+
     // Discard any data we generated while selecting a canned message
     // Frees heap mem
     freeCannedMessageResources();
