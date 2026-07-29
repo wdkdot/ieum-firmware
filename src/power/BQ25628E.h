@@ -130,6 +130,17 @@ class BQ25628E
     const Measurements &measurements() const { return measurements_; }
 
   private:
+    struct AdcRawValues {
+        uint16_t ibus = 0;
+        uint16_t ibat = 0;
+        uint16_t vbus = 0;
+        uint16_t vpmid = 0;
+        uint16_t vbat = 0;
+        uint16_t vsys = 0;
+        uint16_t ts = 0;
+        uint16_t tdie = 0;
+    };
+
     TwoWire *wire_ = nullptr;
     uint8_t address_ = BQ25628E_ADDR;
     uint8_t partNumber_ = 0;
@@ -141,6 +152,7 @@ class BQ25628E
     Status status_;
     InterruptFlags interruptFlags_;
     Measurements measurements_;
+    uint8_t consecutiveMeasurementFailures_ = 0;
 
     bool validateConfiguration(const Configuration &configuration) const;
     bool writeConfiguration(const Configuration &configuration);
@@ -151,10 +163,15 @@ class BQ25628E
     bool writeRegister16(uint8_t reg, uint16_t value);
     bool updateRegister8(uint8_t reg, uint8_t mask, uint8_t value);
     bool updateRegister16(uint8_t reg, uint16_t mask, uint16_t value);
+    bool performAdcConversion(AdcRawValues &raw);
+    bool readAdcRawValues(AdcRawValues &raw);
+    bool applyAdcValues(const AdcRawValues &raw);
+    bool recordMeasurementFailure();
 };
 
 extern BQ25628E *bq25628e;
 
 bool initBQ25628E(TwoWire &wire);
+bool initBQ25628E(TwoWire &wire, const BQ25628E::Configuration &configuration);
 
 #endif // HAS_BQ25628E

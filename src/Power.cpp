@@ -23,9 +23,14 @@
 #include "main.h"
 #include "meshUtils.h"
 #include "power/BQ25628E.h"
+#include "power/BQ25628ESettings.h"
 #include "power/PowerHAL.h"
 #include "power/SGM41562.h"
 #include "sleep.h"
+
+#ifdef HAS_BQ25628E
+#include <atomic>
+#endif
 
 #if defined(ARCH_PORTDUINO)
 #include "api/WiFiServerAPI.h"
@@ -181,6 +186,24 @@ bool pmu_irq = false;
 Power *power;
 
 using namespace meshtastic;
+
+#ifdef HAS_BQ25628E
+namespace
+{
+BQ25628ESettings bq25628eSettings;
+std::atomic<uint16_t> bq25628eChargeVoltageLimitMv{BQ25628E_CHARGE_VOLTAGE_LIMIT_MV};
+std::atomic<uint16_t> bq25628ePendingChargeVoltageLimitMv{BQ25628E_CHARGE_VOLTAGE_LIMIT_MV};
+std::atomic<bool> bq25628eChargeVoltageRequestPending{false};
+bool bq25628eInitializationFailed = false;
+
+BQ25628E::Configuration makeBQ25628EConfiguration()
+{
+    BQ25628E::Configuration configuration;
+    configuration.chargeVoltageLimitMv = bq25628eChargeVoltageLimitMv.load();
+    return configuration;
+}
+} // namespace
+#endif
 
 // NRF52 has AREF_VOLTAGE defined in architecture.h but
 // make sure it's included. If something is wrong with NRF52
@@ -708,8 +731,17 @@ bool Power::analogInit()
 bool Power::setup()
 {
 #ifdef HAS_BQ25628E
+    uint16_t chargeVoltageLimitMv = BQ25628E_CHARGE_VOLTAGE_LIMIT_MV;
+    bq25628eSettings.load(chargeVoltageLimitMv);
+    bq25628eChargeVoltageLimitMv.store(chargeVoltageLimitMv);
+    bq25628ePendingChargeVoltageLimitMv.store(chargeVoltageLimitMv);
+
     // The charger remains autonomous if probing fails, so a missing PMIC must not block startup.
-    const bool bq25628eFound = initBQ25628E(BQ25628E_WIRE);
+    const bool bq25628eFound = initBQ25628E(BQ25628E_WIRE, makeBQ25628EConfiguration());
+    bq25628eInitializationFailed = !bq25628eFound;
+    if (bq25628eInitializationFailed) {
+        LOG_WARN("BQ25628E initialization failed; retrying from Power thread");
+    }
 #endif
 #ifdef HAS_SGM41562
     // Initialize the charger early so AnalogBatteryLevel can read charging
@@ -753,6 +785,27 @@ bool Power::setup()
 
     return found;
 }
+
+#ifdef HAS_BQ25628E
+bool Power::requestBQ25628EChargeVoltageLimit(uint16_t voltageMv)
+{
+    if (!BQ25628ESettings::isSupportedVoltage(voltageMv) || bq25628e == nullptr || !bq25628e->isReady()) {
+        return false;
+    }
+
+    bq25628ePendingChargeVoltageLimitMv.store(voltageMv);
+    bq25628eChargeVoltageLimitMv.store(voltageMv);
+    bq25628eChargeVoltageRequestPending.store(true);
+    setIntervalFromNow(0);
+    runASAP = true;
+    return true;
+}
+
+uint16_t Power::getBQ25628EChargeVoltageLimit() const
+{
+    return bq25628eChargeVoltageLimitMv.load();
+}
+#endif
 
 void Power::powerCommandsCheck()
 {
@@ -914,6 +967,12 @@ void Power::readPowerStatus()
         if (bq25628e->measurements().valid) {
             // The charger has no reliable battery-presence bit, so voltage alone must not change hasBattery.
             batteryVoltageMv = bq25628e->measurements().batteryVoltageMv;
+            if (!bq25628e->hasInput()) {
+                hasBattery = OptTrue;
+                batteryChargePercent = clamp((int)(((batteryVoltageMv - (OCV[NUM_OCV_POINTS - 1] * NUM_CELLS)) * 1e2) /
+                                                   ((OCV[0] * NUM_CELLS) - (OCV[NUM_OCV_POINTS - 1] * NUM_CELLS))),
+                                             0, 100);
+            }
         }
     }
 #endif
@@ -1009,12 +1068,35 @@ void Power::readPowerStatus()
 int32_t Power::runOnce()
 {
 #ifdef HAS_BQ25628E
+    if (bq25628e == nullptr) {
+        if (initBQ25628E(BQ25628E_WIRE, makeBQ25628EConfiguration())) {
+            LOG_INFO("BQ25628E initialization recovered");
+            bq25628eInitializationFailed = false;
+            attachBQ25628EInterrupt();
+        } else if (!bq25628eInitializationFailed) {
+            LOG_WARN("BQ25628E initialization failed; retrying periodically");
+            bq25628eInitializationFailed = true;
+        }
+    }
+
     if (bq25628e != nullptr) {
         static bool communicationFailed = false;
         static bool measurementFailed = false;
         static bool vbusKnown = false;
         static bool previousVbus = false;
         static uint8_t previousFaultStatus = 0;
+
+        if (bq25628eChargeVoltageRequestPending.exchange(false)) {
+            const uint16_t requestedVoltageMv = bq25628ePendingChargeVoltageLimitMv.load();
+            if (!bq25628e->setChargeVoltageLimit(requestedVoltageMv)) {
+                bq25628eChargeVoltageLimitMv.store(bq25628e->configuration().chargeVoltageLimitMv);
+                LOG_WARN("BQ25628E failed to apply %umV charge voltage limit", requestedVoltageMv);
+            } else if (!bq25628eSettings.save(requestedVoltageMv)) {
+                LOG_WARN("BQ25628E charge voltage changed to %umV but was not persisted", requestedVoltageMv);
+            } else {
+                LOG_INFO("BQ25628E charge voltage limit changed to %umV", requestedVoltageMv);
+            }
+        }
 
         if (!bq25628e->refreshStatus()) {
             if (!communicationFailed) {
@@ -1185,6 +1267,14 @@ void Power::attachPowerInterrupts()
     }
 #endif
 #ifdef BQ25628E_INT_PIN
+    attachBQ25628EInterrupt();
+#endif
+}
+
+#ifdef HAS_BQ25628E
+void Power::attachBQ25628EInterrupt()
+{
+#ifdef BQ25628E_INT_PIN
     if (bq25628e != nullptr) {
         pinMode(BQ25628E_INT_PIN, INPUT);
         attachInterrupt(
@@ -1198,6 +1288,7 @@ void Power::attachPowerInterrupts()
     }
 #endif
 }
+#endif
 
 /*
  * Detach the "normal" button interrupts.
