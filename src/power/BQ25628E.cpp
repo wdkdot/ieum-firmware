@@ -3,6 +3,7 @@
 #ifdef HAS_BQ25628E
 
 #include <Arduino.h>
+#include "mesh/Throttle.h"
 
 namespace
 {
@@ -21,6 +22,7 @@ constexpr uint8_t REG_CHARGER_FLAG1 = 0x21;
 constexpr uint8_t REG_FAULT_FLAG = 0x22;
 constexpr uint8_t REG_CHARGER_MASK0 = 0x23;
 constexpr uint8_t REG_ADC_CONTROL = 0x26;
+constexpr uint8_t REG_ADC_FUNCTION_DISABLE = 0x27;
 constexpr uint8_t REG_IBUS_ADC = 0x28;
 constexpr uint8_t REG_IBAT_ADC = 0x2A;
 constexpr uint8_t REG_VBUS_ADC = 0x2C;
@@ -45,13 +47,16 @@ constexpr uint8_t BATFET_SHIP = 0x02;
 constexpr uint8_t EXTERNAL_ILIM_ENABLE_MASK = 0x04;
 constexpr uint8_t ADC_DONE_MASK = 0x40;
 constexpr uint8_t ADC_ONE_SHOT_9_BIT = 0xF0;
+constexpr uint8_t ADC_ENABLE_MASK = 0x80;
 constexpr uint8_t ADC_CONTROL_MASK = 0xFC;
+constexpr uint8_t ADC_ALL_CHANNELS = 0x00;
 constexpr uint8_t EXPECTED_PART_NUMBER = 4;
 constexpr uint8_t PART_NUMBER_MASK = 0x38;
 constexpr uint8_t PART_NUMBER_SHIFT = 3;
 constexpr uint8_t REVISION_MASK = 0x07;
 constexpr uint8_t I2C_START_GAP_US = 100;
-constexpr uint8_t ADC_TIMEOUT_MS = 60;
+constexpr uint16_t ADC_TIMEOUT_MS = 150;
+constexpr uint8_t MAX_CONSECUTIVE_MEASUREMENT_FAILURES = 3;
 
 constexpr uint16_t encodeChargeCurrent(uint16_t currentMa)
 {
@@ -91,8 +96,10 @@ constexpr uint16_t scaleRounded(uint16_t value, uint16_t numerator)
 }
 
 static_assert(encodeChargeCurrent(320) == 0x0100);
+static_assert(encodeChargeVoltage(4000) == 0x0C80);
 static_assert(encodeChargeVoltage(4200) == 0x0D20);
 static_assert(encodeInputCurrent(500) == 0x0190);
+static_assert(encodeWatchdog(0) == 0x00);
 static_assert(signExtend(0x3FFF, 14) == -1);
 static_assert(signExtend(0x1FFF, 14) == 8191);
 static_assert(scaleRounded(0x04EB, 397) == 4998);
@@ -103,12 +110,17 @@ BQ25628E *bq25628e = nullptr;
 
 bool initBQ25628E(TwoWire &wire)
 {
+    return initBQ25628E(wire, BQ25628E::Configuration{});
+}
+
+bool initBQ25628E(TwoWire &wire, const BQ25628E::Configuration &configuration)
+{
     if (bq25628e != nullptr) {
         return true;
     }
 
     bq25628e = new BQ25628E();
-    if (!bq25628e->begin(wire)) {
+    if (!bq25628e->begin(wire, BQ25628E_ADDR, configuration)) {
         delete bq25628e;
         bq25628e = nullptr;
         return false;
@@ -232,14 +244,15 @@ bool BQ25628E::writeConfiguration(const Configuration &configuration)
                                                          encodeWatchdog(configuration.watchdogSeconds));
     const uint8_t externalIlim = configuration.externalInputCurrentLimitEnabled ? EXTERNAL_ILIM_ENABLE_MASK : 0U;
 
-    return updateRegister16(REG_INPUT_CURRENT_LIMIT, IINDPM_MASK, encodeInputCurrent(configuration.inputCurrentLimitMa)) &&
+    // Any I2C write enters host mode and starts the POR watchdog, so configure it first.
+    return updateRegister8(REG_CHARGER_CONTROL0,
+                           static_cast<uint8_t>(CHARGE_ENABLE_MASK | WATCHDOG_RESET_MASK | WATCHDOG_MASK), chargerControl0) &&
+           updateRegister16(REG_INPUT_CURRENT_LIMIT, IINDPM_MASK, encodeInputCurrent(configuration.inputCurrentLimitMa)) &&
            updateRegister16(REG_CHARGE_CURRENT_LIMIT, ICHG_MASK, encodeChargeCurrent(configuration.chargeCurrentLimitMa)) &&
            updateRegister16(REG_CHARGE_VOLTAGE_LIMIT, VREG_MASK, encodeChargeVoltage(configuration.chargeVoltageLimitMv)) &&
            updateRegister8(REG_CHARGER_CONTROL1, INPUT_OVP_MASK, encodeInputOvp(configuration.inputOvervoltageProtectionMv)) &&
            updateRegister8(REG_CHARGER_CONTROL3, EXTERNAL_ILIM_ENABLE_MASK, externalIlim) &&
-           updateRegister8(REG_CHARGER_MASK0, ADC_DONE_MASK, ADC_DONE_MASK) &&
-           updateRegister8(REG_CHARGER_CONTROL0, static_cast<uint8_t>(CHARGE_ENABLE_MASK | WATCHDOG_RESET_MASK | WATCHDOG_MASK),
-                           chargerControl0);
+           updateRegister8(REG_CHARGER_MASK0, ADC_DONE_MASK, ADC_DONE_MASK);
 }
 
 bool BQ25628E::verifyConfiguration(const Configuration &configuration)
@@ -304,6 +317,7 @@ bool BQ25628E::begin(TwoWire &wire, uint8_t address, const Configuration &config
     status_ = {};
     interruptFlags_ = {};
     measurements_ = {};
+    consecutiveMeasurementFailures_ = 0;
 
     uint8_t partInformation = 0;
     if (!readRegister8(REG_PART_INFORMATION, partInformation)) {
@@ -385,55 +399,90 @@ bool BQ25628E::refreshStatus()
 
 bool BQ25628E::updateMeasurements()
 {
-    measurements_.valid = false;
-    measurements_.batteryCurrentValid = false;
-    if (!initialized_ || !updateRegister8(REG_ADC_CONTROL, ADC_CONTROL_MASK, ADC_ONE_SHOT_9_BIT)) {
+    AdcRawValues raw;
+    if (!initialized_ || !performAdcConversion(raw) || !applyAdcValues(raw)) {
+        return recordMeasurementFailure();
+    }
+    return true;
+}
+
+bool BQ25628E::performAdcConversion(AdcRawValues &raw)
+{
+    if (!updateRegister8(REG_ADC_CONTROL, ADC_ENABLE_MASK, 0U) ||
+        !updateRegister8(REG_ADC_FUNCTION_DISABLE, 0xFFU, ADC_ALL_CHANNELS)) {
+        return false;
+    }
+
+    const uint32_t conversionStartedMs = millis();
+    if (!updateRegister8(REG_ADC_CONTROL, ADC_CONTROL_MASK, ADC_ONE_SHOT_9_BIT)) {
         return false;
     }
 
     bool conversionDone = false;
-    for (uint8_t elapsedMs = 0; elapsedMs < ADC_TIMEOUT_MS; elapsedMs++) {
-        uint8_t status0 = 0;
-        if (!readRegister8(REG_CHARGER_STATUS0, status0)) {
+    while (Throttle::isWithinTimespanMs(conversionStartedMs, ADC_TIMEOUT_MS)) {
+        uint8_t chargerStatus0 = 0;
+        if (!readRegister8(REG_CHARGER_STATUS0, chargerStatus0)) {
             return false;
         }
-        if ((status0 & ADC_DONE_MASK) != 0U) {
+        if ((chargerStatus0 & ADC_DONE_MASK) != 0U) {
             conversionDone = true;
             break;
         }
         delay(1);
     }
+
     if (!conversionDone) {
+        updateRegister8(REG_ADC_CONTROL, ADC_ENABLE_MASK, 0U);
+        return false;
+    }
+    return readAdcRawValues(raw);
+}
+
+bool BQ25628E::readAdcRawValues(AdcRawValues &raw)
+{
+    raw = {};
+    return readRegister16(REG_IBUS_ADC, raw.ibus) && readRegister16(REG_IBAT_ADC, raw.ibat) &&
+           readRegister16(REG_VBUS_ADC, raw.vbus) && readRegister16(REG_VPMID_ADC, raw.vpmid) &&
+           readRegister16(REG_VBAT_ADC, raw.vbat) && readRegister16(REG_VSYS_ADC, raw.vsys) &&
+           readRegister16(REG_TS_ADC, raw.ts) && readRegister16(REG_TDIE_ADC, raw.tdie);
+}
+
+bool BQ25628E::applyAdcValues(const AdcRawValues &raw)
+{
+    const uint16_t rawBatteryVoltage = static_cast<uint16_t>((raw.vbat >> 1) & 0x0FFFU);
+    if (rawBatteryVoltage == 0U) {
         return false;
     }
 
-    uint16_t ibus = 0;
-    uint16_t ibat = 0;
-    uint16_t vbus = 0;
-    uint16_t vpmid = 0;
-    uint16_t vbat = 0;
-    uint16_t vsys = 0;
-    uint16_t ts = 0;
-    uint16_t tdie = 0;
-    if (!readRegister16(REG_IBUS_ADC, ibus) || !readRegister16(REG_IBAT_ADC, ibat) || !readRegister16(REG_VBUS_ADC, vbus) ||
-        !readRegister16(REG_VPMID_ADC, vpmid) || !readRegister16(REG_VBAT_ADC, vbat) || !readRegister16(REG_VSYS_ADC, vsys) ||
-        !readRegister16(REG_TS_ADC, ts) || !readRegister16(REG_TDIE_ADC, tdie)) {
-        return false;
-    }
-
-    measurements_.inputCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(ibus >> 1), 15) * 2);
-    measurements_.batteryCurrentValid = ibat != 0x8000U;
+    measurements_ = {};
+    measurements_.inputCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(raw.ibus >> 1), 15) * 2);
+    measurements_.batteryCurrentValid = raw.ibat != 0x8000U;
     if (measurements_.batteryCurrentValid) {
-        measurements_.batteryCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(ibat >> 2), 14) * 4);
+        measurements_.batteryCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(raw.ibat >> 2), 14) * 4);
     }
-    measurements_.inputVoltageMv = scaleRounded(static_cast<uint16_t>((vbus >> 2) & 0x1FFFU), 397);
-    measurements_.pmidVoltageMv = scaleRounded(static_cast<uint16_t>((vpmid >> 2) & 0x1FFFU), 397);
-    measurements_.batteryVoltageMv = scaleRounded(static_cast<uint16_t>((vbat >> 1) & 0x0FFFU), 199);
-    measurements_.systemVoltageMv = scaleRounded(static_cast<uint16_t>((vsys >> 1) & 0x0FFFU), 199);
-    measurements_.thermistorPermille = static_cast<uint16_t>((static_cast<uint32_t>(ts & 0x0FFFU) * 961U + 500U) / 1000U);
-    measurements_.dieTemperatureDeciC = static_cast<int16_t>(signExtend(tdie & 0x0FFFU, 12) * 5);
+    measurements_.inputVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vbus >> 2) & 0x1FFFU), 397);
+    measurements_.pmidVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vpmid >> 2) & 0x1FFFU), 397);
+    measurements_.batteryVoltageMv = scaleRounded(rawBatteryVoltage, 199);
+    measurements_.systemVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vsys >> 1) & 0x0FFFU), 199);
+    measurements_.thermistorPermille =
+        static_cast<uint16_t>((static_cast<uint32_t>(raw.ts & 0x0FFFU) * 961U + 500U) / 1000U);
+    measurements_.dieTemperatureDeciC = static_cast<int16_t>(signExtend(raw.tdie & 0x0FFFU, 12) * 5);
+
     measurements_.valid = true;
+    consecutiveMeasurementFailures_ = 0;
     return true;
+}
+
+bool BQ25628E::recordMeasurementFailure()
+{
+    if (consecutiveMeasurementFailures_ < UINT8_MAX) {
+        consecutiveMeasurementFailures_++;
+    }
+    if (consecutiveMeasurementFailures_ >= MAX_CONSECUTIVE_MEASUREMENT_FAILURES) {
+        measurements_.valid = false;
+        measurements_.batteryCurrentValid = false;
+    }
+    return false;
 }
 
 bool BQ25628E::setInputCurrentLimit(uint16_t currentMa)

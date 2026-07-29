@@ -499,6 +499,23 @@ void InkHUD::MenuApplet::execute(MenuItem item)
         rebootAtMsec = millis() + DEFAULT_REBOOT_SECONDS * 1000;
         break;
 #endif
+
+#ifdef HAS_BQ25628E
+    case TOGGLE_BATTERY_CARE: {
+        if (power == nullptr) {
+            LOG_WARN("BQ25628E charge voltage change requested before Power setup");
+            break;
+        }
+
+        const uint16_t currentVoltageMv = power->getBQ25628EChargeVoltageLimit();
+        const uint16_t requestedVoltageMv = currentVoltageMv == 4000U ? 4200U : 4000U;
+        if (!power->requestBQ25628EChargeVoltageLimit(requestedVoltageMv)) {
+            LOG_WARN("BQ25628E charge voltage change to %umV was rejected", requestedVoltageMv);
+        }
+        break;
+    }
+#endif
+
     // ADC Calibration
     case CALIBRATE_ADC: {
         // Read current measured voltage
@@ -1017,6 +1034,15 @@ void InkHUD::MenuApplet::showPage(MenuPage page)
         items.push_back(MenuItem("Back", previousPage));
 #if defined(ARCH_ESP32)
         items.push_back(MenuItem("Powersave", MenuAction::TOGGLE_POWER_SAVE, MenuPage::EXIT, &config.power.is_power_saving));
+#endif
+#ifdef HAS_BQ25628E
+        if (power != nullptr) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "Charge Limit: %.2f V", power->getBQ25628EChargeVoltageLimit() / 1000.0f);
+            nodeConfigLabels.emplace_back(buf);
+            items.push_back(MenuItem(nodeConfigLabels.back().c_str(), MenuAction::TOGGLE_BATTERY_CARE,
+                                     MenuPage::NODE_CONFIG_POWER));
+        }
 #endif
         // ADC Multiplier
         float effectiveMult = 0.0f;
@@ -1948,9 +1974,13 @@ void InkHUD::MenuApplet::drawSystemInfoPanel(int16_t left, int16_t top, uint16_t
     // Info blocks, left to right
 
     // Voltage
-    float voltage = powerStatus->getBatteryVoltageMv() / 1000.0;
     char voltageStr[6]; // "XX.XV"
-    sprintf(voltageStr, "%.2fV", voltage);
+    const int32_t batteryVoltageMv = powerStatus->getBatteryVoltageMv();
+    if (batteryVoltageMv > 0) {
+        snprintf(voltageStr, sizeof(voltageStr), "%.2fV", batteryVoltageMv / 1000.0f);
+    } else {
+        snprintf(voltageStr, sizeof(voltageStr), "--.--V");
+    }
     printAt(colC[0], labelT, "Bat", CENTER, TOP);
     printAt(colC[0], valT, voltageStr, CENTER, TOP);
 

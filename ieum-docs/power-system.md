@@ -43,16 +43,19 @@ Ieum에서 기대하는 역할:
 
 - I²C 주소 `0x6A`와 part number field `4`를 확인한 뒤에만 레지스터를 변경한다.
 - 입력 전류 제한은 500 mA로 두고, 3.3 kΩ ILIM 저항에 의한 약 0.76 A typical 하드웨어 제한도 계속 활성화한다.
-- 충전 전류 320 mA와 충전 전압 4.20 V는 BQ25628E POR 값과 같게 유지한다.
+- 충전 전류는 320 mA로 두고, 충전 전압은 배터리 보호를 위한 4.00 V를 Ieum 기본값으로 사용한다.
 - 5 V USB-C 입력을 전제로 6.3 V 입력 과전압 보호를 선택한다.
-- 호스트 watchdog은 비활성화하고 칩의 safety timer, TS 감시, thermal regulation과 termination 기본 기능은 변경하지 않는다.
-- ADC는 연속 변환 대신 9-bit one-shot으로만 실행해 배터리 동작 중 대기 전류 증가를 피한다.
+- 첫 I²C 쓰기에서 `REG0x16[1:0]`을 `00b`로 설정해 호스트 watchdog을 비활성화하고, 칩의 safety timer, TS 감시, thermal regulation과 termination 기본 기능은 변경하지 않는다.
+- InkHUD의 `Node Config → Power`에서 충전 상한을 4.00 V와 4.20 V 사이에서 전환하며, 성공한 선택은 `/prefs/bq25628e.dat`에 저장해 재부팅 후에도 적용한다.
+- 저장 파일이 없거나 버전·checksum·값 검증에 실패하면 4.00 V로 복귀한다.
+- ADC는 `REG0x27=0x00`으로 모든 채널을 활성화한 9-bit one-shot을 사용한다. 실기기에서 전체 채널 변환이 기존 60회 polling 제한을 넘는 것을 확인했으므로 실제 경과시간 기준 150 ms timeout을 적용하고, 완료되면 즉시 대기를 끝낸다.
+- ADC 또는 초기 I²C 탐색이 실패하면 실제 0 V로 게시하지 않고 이전 정상값을 제한적으로 유지하며, BQ25628E 탐색을 주기적으로 재시도한다.
 - `INT`가 누락되더라도 startup과 주기적 poll에서 read-to-clear flag, status와 fault를 읽는다. ADC 완료 인터럽트만 mask한다.
 - Ship/Shutdown은 일반 종료 경로에서 자동 실행하지 않고, 별도 확인을 거친 명시적 호출로만 요청한다.
 
-노란색 충전 LED를 제어하는 `STAT`도 open-drain 출력이며 충전 중 LOW다. 이는 nRF52840이 직접 구동하는 active-high LED 2개와 구분한다. BQ25628E는 배터리 유무를 신뢰성 있게 판별하는 전용 bit가 없으므로 ADC의 VBAT 값만으로 배터리 장착 여부나 잔량을 추정하지 않는다.
+노란색 충전 LED를 제어하는 `STAT`도 open-drain 출력이며 충전 중 LOW다. 이는 nRF52840이 직접 구동하는 active-high LED 2개와 구분한다. BQ25628E는 배터리 유무를 신뢰성 있게 판별하는 전용 bit가 없으므로 USB 입력 중에는 ADC의 VBAT 값만으로 배터리 장착 여부를 추정하지 않는다. USB 입력이 없고 유효한 VBAT가 측정되면 실행 중인 Ieum의 전원이 배터리에서 공급되는 것으로 판정한다.
 
-320 mA/4.20 V는 칩 기본값을 다시 쓰는 초기 안전값일 뿐 최종 배터리 사양 검증을 대신하지 않는다. 실기기 충전 전에는 셀의 최대 충전 전압·허용 전류, ILIM 실측값, TS 네트워크, USB source 전압과 충전 온도를 확인한다.
+320 mA와 사용자가 선택한 4.00 V/4.20 V 상한은 최종 배터리 사양 검증을 대신하지 않는다. 4.00 V 모드는 USB를 장시간 연결하는 개발 환경에서 배터리의 높은 충전 상태 체류 시간을 줄이기 위한 정책이다. 실기기 충전 전에는 셀의 최대 충전 전압·허용 전류, ILIM 실측값, TS 네트워크, USB source 전압과 충전 온도를 확인한다.
 
 ## SGM6036-3.3
 
