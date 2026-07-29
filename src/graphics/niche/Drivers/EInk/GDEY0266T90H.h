@@ -32,6 +32,7 @@ class GDEY0266T90H : public SSD16XX
 
     void begin(SPIClass *spi, uint8_t pinDc, uint8_t pinCs, uint8_t pinBusy, uint8_t pinRst = 0xFF) override;
     void update(uint8_t *imageData, UpdateTypes type) override;
+    void setInteractiveMode(bool enabled) override;
     void setQuickUpdateMode(QuickUpdateMode mode);
 
   protected:
@@ -62,6 +63,7 @@ class GDEY0266T90H : public SSD16XX
     void finishSession(bool enterDeepSleep);
     void setPower(bool enabled);
     void releasePins();
+    void setRamCursor();
     void sendImageBottomToTop(const uint8_t *image);
     void writeZeroPlane();
 
@@ -69,6 +71,10 @@ class GDEY0266T90H : public SSD16XX
     uint8_t *previousBuffer = nullptr;
     bool hasPreviousBuffer = false;
     bool sessionActive = false;
+    bool interactiveMode = false;
+    bool interactiveSessionPrepared = false;
+    bool interactiveExitPending = false;
+    bool keepSessionAfterUpdate = false;
     uint32_t refreshStartedAt = 0;
 
     uint8_t pinPower = 0xFF;

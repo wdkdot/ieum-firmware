@@ -30,6 +30,7 @@ class EInk : private concurrency::OSThread
     EInk(uint16_t width, uint16_t height, UpdateTypes supported);
     virtual void begin(SPIClass *spi, uint8_t pin_dc, uint8_t pin_cs, uint8_t pin_busy, uint8_t pin_rst = -1) = 0;
     virtual void update(uint8_t *imageData, UpdateTypes type) = 0; // Change the display image
+    virtual void setInteractiveMode(bool) {}                      // Hint that several FAST updates are expected
     void await();                                                  // Wait for an in-progress update to complete before proceeding
     bool supports(UpdateTypes type);                               // Can display perform a certain update type
     bool busy() { return updateRunning; }                          // Display able to update right now?

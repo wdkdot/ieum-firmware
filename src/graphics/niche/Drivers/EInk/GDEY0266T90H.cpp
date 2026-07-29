@@ -46,6 +46,22 @@ void GDEY0266T90H::setQuickUpdateMode(QuickUpdateMode mode)
     quickUpdateMode = mode;
 }
 
+void GDEY0266T90H::setInteractiveMode(bool enabled)
+{
+    if (interactiveMode == enabled)
+        return;
+
+    interactiveMode = enabled;
+    if (enabled) {
+        LOG_DEBUG("GDEY0266T90H interactive refresh session requested");
+        interactiveSessionPrepared = false;
+        interactiveExitPending = false;
+    } else {
+        LOG_DEBUG("GDEY0266T90H interactive refresh session closing");
+        interactiveExitPending = true;
+    }
+}
+
 void GDEY0266T90H::update(uint8_t *imageData, UpdateTypes type)
 {
     if (!imageData) {
@@ -57,10 +73,26 @@ void GDEY0266T90H::update(uint8_t *imageData, UpdateTypes type)
     buffer = imageData;
     updateType = (type == FAST) ? FAST : FULL;
 
-    if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL && (!previousBuffer || !hasPreviousBuffer)) {
+    const bool interactivePartial = interactiveMode && quickUpdateMode == QuickUpdateMode::PARTIAL;
+    const bool leavingInteractivePartial = interactiveExitPending && quickUpdateMode == QuickUpdateMode::PARTIAL;
+
+    if (interactivePartial && !interactiveSessionPrepared) {
+        LOG_DEBUG("GDEY0266T90H preparing interactive partial refresh with a full base frame");
+        updateType = FULL;
+    } else if (!interactiveMode && leavingInteractivePartial) {
+        LOG_DEBUG("GDEY0266T90H closing interactive refresh session with a full update");
+        updateType = FULL;
+    } else if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL &&
+               (!previousBuffer || !hasPreviousBuffer)) {
         LOG_INFO("GDEY0266T90H partial refresh needs a base frame; using full refresh");
         updateType = FULL;
     }
+
+    keepSessionAfterUpdate = interactivePartial;
+    const bool reusePreparedSession =
+        interactivePartial && interactiveSessionPrepared && sessionActive && updateType == FAST;
+    if (reusePreparedSession)
+        LOG_DEBUG("GDEY0266T90H reusing interactive partial refresh session");
 
     startSession();
     if (failed) {
@@ -69,13 +101,15 @@ void GDEY0266T90H::update(uint8_t *imageData, UpdateTypes type)
         return;
     }
 
-    reset();
-    configScanning();
-    configFullscreen();
-    configWaveform();
+    if (!reusePreparedSession) {
+        reset();
+        configScanning();
+        configFullscreen();
+        configWaveform();
 
-    if (updateType == FAST && quickUpdateMode == QuickUpdateMode::FAST)
-        configureFastRefresh();
+        if (updateType == FAST && quickUpdateMode == QuickUpdateMode::FAST)
+            configureFastRefresh();
+    }
 
     wait(COMMAND_BUSY_TIMEOUT_MS);
     if (failed) {
@@ -159,8 +193,8 @@ void GDEY0266T90H::configFullscreen()
 
 void GDEY0266T90H::configWaveform()
 {
-    sendCommand(0x3C); // Border follows LUT1.
-    sendData(0x05);
+    sendCommand(0x3C); // Drive the VBD edge with the example's white-border waveform.
+    sendData(0x01);
 
     sendCommand(0x18); // Select the internal temperature sensor.
     sendData(0x80);
@@ -194,14 +228,29 @@ void GDEY0266T90H::configureFastRefresh()
 
 void GDEY0266T90H::configUpdateSequence()
 {
+    if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL) {
+        sendCommand(0x21); // Keep both RAM planes normal and select 184-source mode.
+        sendData(0x00);
+        sendData(0x40);
+    }
+
     sendCommand(0x22);
 
     if (updateType == FULL)
-        sendData(0xF4);
+        sendData(keepSessionAfterUpdate ? 0xF4 : 0xF7);
     else if (quickUpdateMode == QuickUpdateMode::PARTIAL)
-        sendData(0x1C);
+        sendData(keepSessionAfterUpdate ? 0x1C : 0xDC);
     else
         sendData(0xC7);
+}
+
+void GDEY0266T90H::setRamCursor()
+{
+    sendCommand(0x4E);
+    sendData(0x00);
+    sendCommand(0x4F);
+    sendData(0x67);
+    sendData(0x01);
 }
 
 void GDEY0266T90H::sendImageBottomToTop(const uint8_t *image)
@@ -225,6 +274,7 @@ void GDEY0266T90H::sendImageBottomToTop(const uint8_t *image)
 
 void GDEY0266T90H::writeNewImage()
 {
+    setRamCursor();
     sendCommand(0x24);
     sendImageBottomToTop(buffer);
 }
@@ -232,6 +282,7 @@ void GDEY0266T90H::writeNewImage()
 void GDEY0266T90H::writeOldImage()
 {
     if (updateType == FAST && quickUpdateMode == QuickUpdateMode::PARTIAL && previousBuffer && hasPreviousBuffer) {
+        setRamCursor();
         sendCommand(0x26);
         sendImageBottomToTop(previousBuffer);
         return;
@@ -246,6 +297,7 @@ void GDEY0266T90H::writeZeroPlane()
     uint8_t zeroes[CHUNK_SIZE] = {};
     uint32_t remaining = bufferSize;
 
+    setRamCursor();
     sendCommand(0x26);
     while (remaining > 0) {
         const uint16_t bytes = remaining > CHUNK_SIZE ? CHUNK_SIZE : static_cast<uint16_t>(remaining);
@@ -279,12 +331,27 @@ void GDEY0266T90H::finalizeUpdate()
         hasPreviousBuffer = true;
     }
 
+    if (keepSessionAfterUpdate) {
+        interactiveSessionPrepared = true;
+        if (interactiveMode)
+            interactiveExitPending = false;
+        keepSessionAfterUpdate = false;
+        return;
+    }
+
+    interactiveSessionPrepared = false;
+    interactiveExitPending = false;
+    keepSessionAfterUpdate = false;
     finishSession(true);
 }
 
 void GDEY0266T90H::abortUpdate()
 {
     hasPreviousBuffer = false;
+    interactiveSessionPrepared = false;
+    keepSessionAfterUpdate = false;
+    if (!interactiveMode)
+        interactiveExitPending = false;
     finishSession(false);
 }
 
@@ -299,6 +366,9 @@ void GDEY0266T90H::deepSleep()
 
 void GDEY0266T90H::startSession()
 {
+    if (sessionActive)
+        return;
+
     if (!spi || pin_dc == 0xFF || pin_cs == 0xFF || pin_busy == 0xFF) {
         LOG_ERROR("GDEY0266T90H is missing required SPI or control pins");
         failed = true;

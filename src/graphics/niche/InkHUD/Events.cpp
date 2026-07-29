@@ -324,6 +324,8 @@ void InkHUD::Events::onFreeTextCancel()
 // Returns 0 to signal that we agree to sleep now
 int InkHUD::Events::beforeDeepSleep(void *unused)
 {
+    inkhud->setDisplayInteractive(false);
+
     // If a previous display update is in progress, wait for it to complete.
     inkhud->awaitUpdate();
 
@@ -372,6 +374,7 @@ void InkHUD::Events::applyingChanges()
 // Makes sure we don't lose message history / InkHUD config
 int InkHUD::Events::beforeReboot(void *unused)
 {
+    inkhud->setDisplayInteractive(false);
 
     // Notify all applets that we're "shutting down"
     // They don't need to know that it's really a reboot

@@ -81,15 +81,15 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 
 ### 현재 구현 상태
 
-2026-07-16 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경에 InkHUD와 GDEY0266T90H 지원을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
+2026-07-29 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경에 InkHUD와 GDEY0266T90H 지원을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
 
 - RAK4630 내부 SX1262 연결, 센서 I²C, GNSS·보조 UART, E-ink SPI와 확인된 보드 GPIO 번호를 정의했다.
 - P0.09와 P0.10을 일반 GPIO로 사용할 수 있도록 nRF52 NFC 핀 설정을 빌드에 반영했다.
 - 개인 소장용 노드이므로 정식 HardwareModel을 요청하지 않고 `PRIVATE_HW`로 식별한다.
 - GNSS EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 전원 안정화 시간이 미확정이므로 `HAS_GPS=0`은 유지한다.
 - E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 공식 패널 자료에 따라 BUSY active high, RESET과 CS active low인 SSD1685 드라이버를 연결하고 InkHUD 빌드를 활성화했다.
-- 전체 갱신은 공식 `0xF4` 시퀀스, 빠른 갱신은 공식 1.5초 `0xC7` 시퀀스를 사용한다. 부분 갱신 `0x1C`도 구현했지만 실물 검증 전까지 variant 설정에서 비활성화한다.
-- 화면 갱신 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. BUSY timeout에도 명령 전송 없이 같은 전원 차단 경로를 사용한다.
+- 일반 화면은 검증 예제의 프로필 3인 전체 `0xF7`, 부분 `0xDC`, white border `0x01`을 사용한다. 메뉴 안에서는 `0xF4` 기준 프레임 뒤 reset과 전원 차단 없이 `0x1C` 부분 갱신을 이어서 사용한다. 빠른 갱신 fallback은 공식 1.5초 `0xC7` 시퀀스다.
+- 일반 화면 갱신과 메뉴 종료 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. 메뉴가 열린 동안에는 다음 입력을 위해 패널 세션을 유지한다. BUSY timeout에는 추가 명령 전송 없이 즉시 전원 차단 경로를 사용한다.
 - 기본 UI는 184×360 세로 방향과 단일 InkHUD tile이다. 실기기에서 확인한 상하 반전은 GDEY0266T90H 드라이버의 행 역순 전송으로 보정한다.
 - 두 사용자 버튼은 외부 pull-up active low로 정의했다. 두 버튼 모두 InkHUD의 short/long press handler에 연결해 초기 안내 화면과 기본 UI를 조작하며, 보조 버튼의 최종 역할은 추후 분리한다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
@@ -110,7 +110,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 | ATGM336H-5NR-32        | 지원됨    | 기존 ATGM336H GNSS 지원과 Ieum UART/전원 핀 연결                                        |
 | MMA8652FC              | 초기 지원 | 0x1D/WHO_AM_I 탐지, 12비트 XYZ, 6.25 Hz Low Power와 INT1 motion IRQ                     |
 | BQ25628E               | 초기 지원 | 별도 power 드라이버와 Ieum 전원 관리자에서 식별, 보수적 설정, 상태·fault·ADC와 INT 처리 |
-| GDEY0266T90H / SSD1685 | 초기 지원 | InkHUD 전체 갱신과 공식 빠른 갱신, opt-in 부분 갱신; 실물 검증 필요                     |
+| GDEY0266T90H / SSD1685 | 초기 지원 | InkHUD 전체 갱신과 기본 부분 갱신, 공식 빠른 갱신 fallback; 장기 잔상 검증 필요         |
 | TPS22919-Q1            | 초기 지원 | 갱신별 ON/OFF, deep sleep과 high-Z 수명주기; 역급전 전류 실측 필요                      |
 
 ## 기존 지원을 재사용하는 부품
@@ -198,7 +198,7 @@ variants/nrf52840/ieum/nicheGraphics.h
 
 `src/graphics/niche/Drivers/EInk/SSD16XX.*` 구조를 재사용하고, SSD1685 초기화 명령, RAM 방향, 해상도와 update control 값은 Good Display 공식 패널 사양과 Arduino 예제로 확인했다.
 
-화면 갱신 순서:
+일반 화면 갱신 순서:
 
 1. TPS22919 E-ink 전원을 켠다.
 2. 패널 reset과 SSD1685 초기화를 수행한다. 별도 전원 안정화 시간은 실측 후 추가한다.
@@ -209,7 +209,7 @@ variants/nrf52840/ieum/nicheGraphics.h
 7. SPI와 제어 핀을 역급전 방지 상태로 전환한다.
 8. TPS22919를 끈다.
 
-현재 전체 갱신은 `0x22=0xF4`, 빠른 갱신은 공식 1.5초 설정과 `0x22=0xC7`을 사용한다. 전체 화면 부분 갱신은 이전 프레임을 MCU에 보존해 `0x26` base plane을 복원하고 `0x22=0x1C`를 사용하지만, 전원 차단 뒤의 영상 품질을 검증하기 전까지 기본 설정에서는 사용하지 않는다. InkHUD display resilience 초기값은 FAST 5회당 FULL 1회다.
+현재 일반 화면은 검증 예제의 프로필 3인 `0x22=0xF7` 전체 갱신과 `0x22=0xDC` 부분 갱신, `0x3C=0x01` white border를 사용한다. 프로필 4의 `0xC0` Hi-Z는 Ieum 패널에서 VBD 가장자리가 검게 남아 제외했다. 메뉴 진입 시 `0xF4` 전체 갱신으로 기준 프레임과 구동 회로를 준비하고, 메뉴 안의 후속 갱신은 rail과 SPI를 유지한 채 reset 없이 `0x1C`를 사용한다. 메뉴 종료 시 `0xF7` 전체 갱신 후 deep sleep과 TPS22919 OFF를 수행한다. 부분 갱신은 이전 프레임을 MCU에 보존해 `0x26` base plane을 복원하고 `0x21=0x00,0x40`으로 RAM 극성과 184-source 모드를 명시한다. 초기 시험에서 5회마다 전체 갱신을 강제할 필요는 없었으므로 고정 횟수 정책은 두지 않고, InkHUD display-health maintenance와 장기 잔상 측정 결과에 따라 전체 갱신을 수행한다.
 
 ## 움직임 기반 GNSS 정책
 

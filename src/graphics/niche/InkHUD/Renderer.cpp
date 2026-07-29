@@ -102,6 +102,11 @@ void InkHUD::Renderer::forceUpdate(Drivers::EInk::UpdateTypes type, bool all, bo
         render(false);
 }
 
+void InkHUD::Renderer::setInteractiveMode(bool enabled)
+{
+    driver->setInteractiveMode(enabled);
+}
+
 // Wait for any in-progress display update to complete before continuing
 void InkHUD::Renderer::awaitUpdate()
 {

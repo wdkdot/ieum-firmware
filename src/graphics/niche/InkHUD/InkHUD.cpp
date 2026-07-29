@@ -296,6 +296,11 @@ void InkHUD::InkHUD::forceUpdate(EInk::UpdateTypes type, bool all, bool async)
     renderer->forceUpdate(type, all, async);
 }
 
+void InkHUD::InkHUD::setDisplayInteractive(bool enabled)
+{
+    renderer->setInteractiveMode(enabled);
+}
+
 // Wait for any in-progress display update to complete before continuing
 void InkHUD::InkHUD::awaitUpdate()
 {

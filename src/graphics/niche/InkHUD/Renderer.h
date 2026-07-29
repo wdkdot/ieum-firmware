@@ -40,6 +40,7 @@ class Renderer : protected concurrency::OSThread
     void requestUpdate(bool all = false); // Update display, if a foreground applet has info it wants to show
     void forceUpdate(Drivers::EInk::UpdateTypes type = Drivers::EInk::UpdateTypes::UNSPECIFIED, bool all = false,
                      bool async = true); // Update display, regardless of whether any applets requested this
+    void setInteractiveMode(bool enabled);
 
     // Wait for an update to complete
     void awaitUpdate();
