@@ -837,11 +837,17 @@ void GPS::setPowerState(GPSPowerState newState, uint32_t sleepTime)
         gotTime = false;
         if (oldState == GPS_IDLE) // If hardware already awake, no changes needed
             break;
+#ifndef GPS_POWER_CYCLE_SERIAL
         if (oldState != GPS_ACTIVE && oldState != GPS_IDLE) // If hardware just waking now, clear buffer
             clearBuffer();
+#endif
         powerMon->setState(meshtastic_PowerMon_State_GPS_Active); // Report change for power monitoring (during testing)
         writePinEN(true);                                         // Power (EN pin): on
         setPowerPMU(true);                                        // Power (PMU): on
+#ifdef GPS_POWER_CYCLE_SERIAL
+        attachSerial();
+        clearBuffer();
+#endif
         writePinStandby(false);                                   // Standby (pin): awake (not standby)
         setPowerUBLOX(true);                                      // Standby (UBLOX): awake
         break;
@@ -856,10 +862,18 @@ void GPS::setPowerState(GPSPowerState newState, uint32_t sleepTime)
 
     case GPS_HARDSLEEP:
         powerMon->clearState(meshtastic_PowerMon_State_GPS_Active); // Report change for power monitoring (during testing)
+#ifdef GPS_POWER_CYCLE_SERIAL
+        writePinStandby(true);           // Standby (pin): asleep (not awake)
+        setPowerUBLOX(false, sleepTime); // Standby (UBLOX): asleep, timed
+        detachSerial();
+        writePinEN(false);  // Power (EN pin): off
+        setPowerPMU(false); // Power (PMU): off
+#else
         writePinEN(false);                                          // Power (EN pin): off
         setPowerPMU(false);                                         // Power (PMU): off
         writePinStandby(true);                                      // Standby (pin): asleep (not awake)
         setPowerUBLOX(false, sleepTime);                            // Standby (UBLOX): asleep, timed
+#endif
 #ifdef GNSS_AIROHA
         digitalWrite(PIN_GPS_EN, LOW);
 #endif
@@ -868,10 +882,18 @@ void GPS::setPowerState(GPSPowerState newState, uint32_t sleepTime)
     case GPS_OFF:
         assert(sleepTime == 0);                                     // This is an indefinite sleep
         powerMon->clearState(meshtastic_PowerMon_State_GPS_Active); // Report change for power monitoring (during testing)
+#ifdef GPS_POWER_CYCLE_SERIAL
+        writePinStandby(true);      // Standby (pin): asleep
+        setPowerUBLOX(false, 0);    // Standby (UBLOX): asleep, indefinitely
+        detachSerial();
+        writePinEN(false);  // Power (EN pin): off
+        setPowerPMU(false); // Power (PMU): off
+#else
         writePinEN(false);                                          // Power (EN pin): off
         setPowerPMU(false);                                         // Power (PMU): off
         writePinStandby(true);                                      // Standby (pin): asleep
         setPowerUBLOX(false, 0);                                    // Standby (UBLOX): asleep, indefinitely
+#endif
 #ifdef GNSS_AIROHA
         digitalWrite(PIN_GPS_EN, LOW);
 #endif
@@ -1284,6 +1306,9 @@ GnssModel_t GPS::probe(int serialSpeed)
             _serial_gps->updateBaudRate(serialSpeed);
         }
 #endif
+#ifdef GPS_POWER_CYCLE_SERIAL
+        serialBaud = serialSpeed;
+#endif
 
         memset(&ublox_info, 0, sizeof(ublox_info));
         delay(100);
@@ -1531,6 +1556,56 @@ GnssModel_t GPS::getProbeResponse(unsigned long timeout, const std::vector<ChipI
     return GNSS_MODEL_UNKNOWN; // Return unknown on timeout
 }
 
+#ifdef GPS_POWER_CYCLE_SERIAL
+void GPS::attachSerial()
+{
+    if (serialAttached || !_serial_gps)
+        return;
+
+#if defined(GPS_POWER_STABILIZATION_MS) && GPS_POWER_STABILIZATION_MS > 0
+    delay(GPS_POWER_STABILIZATION_MS);
+#endif
+
+#if defined(ARCH_ESP32)
+    _serial_gps->setRxBufferSize(SERIAL_BUFFER_SIZE);
+    _serial_gps->begin(serialBaud, SERIAL_8N1, rx_gpio, tx_gpio);
+#elif defined(ARCH_RP2040)
+    _serial_gps->setPinout(tx_gpio, rx_gpio);
+    _serial_gps->setFIFOSize(256);
+    _serial_gps->begin(serialBaud);
+#elif defined(ARCH_NRF52)
+    _serial_gps->setPins(rx_gpio, tx_gpio);
+    _serial_gps->begin(serialBaud);
+#elif defined(ARCH_STM32WL)
+    _serial_gps->setTx(tx_gpio);
+    _serial_gps->setRx(rx_gpio);
+    _serial_gps->begin(serialBaud);
+#elif defined(ARCH_PORTDUINO)
+    _serial_gps->begin(serialBaud);
+#else
+#error Unsupported architecture!
+#endif
+
+    serialAttached = true;
+}
+
+void GPS::detachSerial()
+{
+    if (!serialAttached || !_serial_gps)
+        return;
+
+    _serial_gps->flush();
+    _serial_gps->end();
+#ifdef GPS_SERIAL_PINS_DISCONNECT
+    GPS_SERIAL_PINS_DISCONNECT();
+#else
+    pinMode(rx_gpio, INPUT);
+    pinMode(tx_gpio, INPUT);
+#endif
+    serialAttached = false;
+}
+#endif
+
 std::unique_ptr<GPS> GPS::createGps()
 {
     int8_t _rx_gpio = config.position.rx_gpio;
@@ -1610,13 +1685,14 @@ std::unique_ptr<GPS> GPS::createGps()
 #endif
 
     if (_serial_gps) {
+        LOG_DEBUG("Use GPIO%d for GPS RX", new_gps->rx_gpio);
+        LOG_DEBUG("Use GPIO%d for GPS TX", new_gps->tx_gpio);
+
+#ifndef GPS_POWER_CYCLE_SERIAL
 #ifdef ARCH_ESP32
         // In esp32 framework, setRxBufferSize needs to be initialized before Serial
         _serial_gps->setRxBufferSize(SERIAL_BUFFER_SIZE); // the default is 256
 #endif
-
-        LOG_DEBUG("Use GPIO%d for GPS RX", new_gps->rx_gpio);
-        LOG_DEBUG("Use GPIO%d for GPS TX", new_gps->tx_gpio);
 
 //  ESP32 has a special set of parameters vs other arduino ports
 #if defined(ARCH_ESP32)
@@ -1637,6 +1713,7 @@ std::unique_ptr<GPS> GPS::createGps()
         _serial_gps->begin(GPS_BAUDRATE);
 #else
 #error Unsupported architecture!
+#endif
 #endif
     }
     return new_gps;

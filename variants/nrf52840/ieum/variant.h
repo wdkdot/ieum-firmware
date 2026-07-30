@@ -52,10 +52,19 @@ extern "C" {
 #define PIN_SERIAL2_RX (19) // P0.19, UART1_RX
 #define PIN_SERIAL2_TX (20) // P0.20, UART1_TX
 
+#define HAS_GPS 1
 #define GPS_RX_PIN PIN_SERIAL1_RX
 #define GPS_TX_PIN PIN_SERIAL1_TX
 #define PIN_GPS_EN (17) // P0.17
 #define GPS_EN_ACTIVE HIGH
+#define GPS_POWER_CYCLE_SERIAL
+#define GPS_POWER_STABILIZATION_MS 1000 // Provisional bring-up guard; verify on hardware.
+#define GPS_MAX_SEARCH_TIME_MS (5UL * 60UL * 1000UL)
+#define GPS_SERIAL_PINS_DISCONNECT() ieumGnssUartPinsDisconnect()
+
+#ifndef USERPREFS_CONFIG_GPS_UPDATE_INTERVAL
+#define USERPREFS_CONFIG_GPS_UPDATE_INTERVAL (30 * 60)
+#endif
 
 // SPI0 is internal to the RAK4630 SX1262. SPI1 is wired to the E-ink panel.
 #define SPI_INTERFACES_COUNT 2
@@ -129,6 +138,8 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define IEUM_BUTTON2_PIN PIN_BUTTON2
 #define IEUM_LED1_PIN PIN_LED1
 #define IEUM_LED2_PIN PIN_LED2
+
+void ieumGnssUartPinsDisconnect(void);
 
 // Use native USB VBUS detection for the initial board-support build.
 #define NRF_APM

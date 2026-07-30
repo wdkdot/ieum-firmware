@@ -51,16 +51,16 @@ PR #2, #3, #5와 #6은 squash merge되었으므로 기능 브랜치의 끝 commi
 
 ## 남은 MVP 작업
 
-| 순서 | 작업                           | 현재 상태                                                          | 완료 조건                                                                           | 권장 브랜치                  |
-| ---: | ------------------------------ | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------- |
-|    1 | SWD·USB·기본 부팅              | RAK4631 기반 설정과 복구 문서 통합, 실물 미검증                    | 완성 보드에서 SWD·USB 복구와 부트로더 호환성 확인                                   | `codex/ieum-bringup`         |
-|    2 | RAK4630 LoRa·BLE               | 기존 SX1262·nRF52 BLE 경로가 `ieum` build에 포함, 실물 미검증      | 완성 보드에서 LoRa 송수신과 BLE 연결 확인                                           | `codex/ieum-bringup`         |
-|    3 | I²C inventory와 환경 telemetry | AHT20/BMP3XX 공통 드라이버 존재                                    | 주소 후보와 ID probe, AHT20/BMP388 telemetry 생성, timeout·오류 복구 경로 구현      | `codex/ieum-telemetry`       |
-|    4 | ATGM336H 수명주기              | 핀과 rail-off 초기화만 구현, `HAS_GPS=0`                           | 전원 ON/OFF, 안정화 timeout, UART attach/detach·high-Z와 fix 종료 경로 구현         | `codex/ieum-gnss-power`      |
-|    5 | MMA8652FC                      | PR #2로 코드 통합 및 빌드 성공, 실물 미검증                        | 완성 보드에서 WHO_AM_I 0x4A, XYZ, INT1 source/latch와 I²C 오류 복구 확인            | bring-up 후속 commit         |
-|    6 | BQ25628E                       | PR #5로 코드 통합 및 빌드 성공, 실물 미검증                        | 완성 보드에서 part ID, 상태·fault·ADC, INT, 충전 제한과 watchdog 정책 확인          | bring-up 후속 commit         |
-|    7 | GDEY0266T90H InkHUD            | PR #6 통합 후 방향 확인, 프로필 3·메뉴 가속 부분 갱신 보정         | F7/DC/01·F4/1C/01 BUSY timing, 장기 잔상, deep sleep, GPIO high-Z와 rail-off 확인   | bring-up 후속 commit         |
-|    8 | 소프트웨어 통합                | variant·MMA8652FC·BQ25628E·InkHUD 통합 완료, telemetry·GNSS 미완료 | 남은 기능을 함께 빌드하고 모든 주변장치 오류가 LoRa/BLE/USB 흐름을 막지 않도록 구성 | `codex/ieum-mvp-integration` |
+| 순서 | 작업                           | 현재 상태                                                                     | 완료 조건                                                                           | 권장 브랜치                  |
+| ---: | ------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
+|    1 | SWD·USB·기본 부팅              | RAK4631 기반 설정과 복구 문서 통합, 실물 미검증                               | 완성 보드에서 SWD·USB 복구와 부트로더 호환성 확인                                   | `codex/ieum-bringup`         |
+|    2 | RAK4630 LoRa·BLE               | 기존 SX1262·nRF52 BLE 경로가 `ieum` build에 포함, 실물 미검증                 | 완성 보드에서 LoRa 송수신과 BLE 연결 확인                                           | `codex/ieum-bringup`         |
+|    3 | I²C inventory와 환경 telemetry | AHT20/BMP3XX 공통 드라이버 존재                                               | 주소 후보와 ID probe, AHT20/BMP388 telemetry 생성, timeout·오류 복구 경로 구현      | `codex/ieum-telemetry`       |
+|    4 | ATGM336H 수명주기              | 전원 ON/OFF, 1초 시작 guard, UART attach/detach·high-Z와 5분 fix timeout 구현 | 실기기 NMEA·TTFF, 안정화 시간, rail-off 핀 전압과 역급전 전류 검증                  | `codex/ieum-gnss-power`      |
+|    5 | MMA8652FC                      | PR #2로 코드 통합 및 빌드 성공, 실물 미검증                                   | 완성 보드에서 WHO_AM_I 0x4A, XYZ, INT1 source/latch와 I²C 오류 복구 확인            | bring-up 후속 commit         |
+|    6 | BQ25628E                       | PR #5로 코드 통합 및 빌드 성공, 실물 미검증                                   | 완성 보드에서 part ID, 상태·fault·ADC, INT, 충전 제한과 watchdog 정책 확인          | bring-up 후속 commit         |
+|    7 | GDEY0266T90H InkHUD            | PR #6 통합 후 방향 확인, 프로필 3·메뉴 가속 부분 갱신 보정                    | F7/DC/01·F4/1C/01 BUSY timing, 장기 잔상, deep sleep, GPIO high-Z와 rail-off 확인   | bring-up 후속 commit         |
+|    8 | 소프트웨어 통합                | variant·MMA8652FC·BQ25628E·InkHUD·GNSS 수명주기 코드 통합, telemetry 미완료   | 환경 telemetry를 추가하고 모든 주변장치 오류가 LoRa/BLE/USB 흐름을 막지 않도록 검증 | `codex/ieum-mvp-integration` |
 
 CI 정리는 PR #3으로 통합되었다. Ieum PR에서는 `pio run -e ieum`, Trunk와 Semgrep을 실행하며, 실기기 검증 결과는 별도의 bring-up 기록으로 남긴다.
 
@@ -85,13 +85,13 @@ CI 정리는 PR #3으로 통합되었다. Ieum PR에서는 `pio run -e ieum`, Tr
 - [x] RAK4631 기반 SWD와 USB 복구 구성을 코드와 문서에 반영
 - [x] 기존 LoRa와 BLE 지원을 Ieum variant build에 포함
 - [ ] AHT20-F와 BMP388 probe·telemetry·오류 복구 구현
-- [ ] ATGM336H fix timeout·UART 격리·전원 수명주기 구현
+- [x] ATGM336H fix timeout·UART 격리·전원 수명주기 구현
 - [x] MMA8652FC XYZ·INT1·latch 해제·오류 복구 구현
 - [x] BQ25628E 식별·상태·fault·보수적 충전 설정 구현
 - [x] GDEY0266T90H 전체 갱신·BUSY timeout·deep sleep·rail-off 구현
 - [ ] 주변장치 실패가 LoRa, BLE와 USB 흐름을 막지 않도록 bounded wait 적용
 - [x] MMA8652FC, BQ25628E와 GDEY0266T90H를 `ieum/main`에 순차 병합
-- [ ] 환경 telemetry와 GNSS 수명주기를 구현하고 최종 MVP 통합 빌드 완료
+- [ ] 환경 telemetry를 구현하고 GNSS 수명주기를 실기기에서 검증한 뒤 최종 MVP 통합 완료
 
 ## MVP 이후
 

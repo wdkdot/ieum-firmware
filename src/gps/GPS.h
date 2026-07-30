@@ -208,6 +208,13 @@ class GPS : private concurrency::OSThread
     static HardwareSerial *_serial_gps;
 #endif
 
+#ifdef GPS_POWER_CYCLE_SERIAL
+    void attachSerial();
+    void detachSerial();
+    bool serialAttached = false;
+    uint32_t serialBaud = GPS_BAUDRATE;
+#endif
+
     // Create a ublox packet for editing in memory
     uint8_t makeUBXPacket(uint8_t class_id, uint8_t msg_id, uint8_t payload_size, const uint8_t *msg);
     uint8_t makeCASPacket(uint8_t class_id, uint8_t msg_id, uint8_t payload_size, const uint8_t *msg);

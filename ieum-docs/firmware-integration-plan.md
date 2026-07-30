@@ -81,12 +81,12 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 
 ### 현재 구현 상태
 
-2026-07-29 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경에 InkHUD와 GDEY0266T90H 지원을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
+2026-07-30 기준으로 초기 board-support variant와 `ieum` PlatformIO 환경에 GNSS, InkHUD와 GDEY0266T90H 지원을 추가했으며 `pio run -e ieum` 빌드를 확인했다.
 
 - RAK4630 내부 SX1262 연결, 센서 I²C, GNSS·보조 UART, E-ink SPI와 확인된 보드 GPIO 번호를 정의했다.
 - P0.09와 P0.10을 일반 GPIO로 사용할 수 있도록 nRF52 NFC 핀 설정을 빌드에 반영했다.
 - 개인 소장용 노드이므로 정식 HardwareModel을 요청하지 않고 `PRIVATE_HW`로 식별한다.
-- GNSS EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 전원 안정화 시간이 미확정이므로 `HAS_GPS=0`은 유지한다.
+- GNSS EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. GNSS 기능을 활성화했으며, 측정할 때만 주 전원을 켜고 임시 1초 guard 뒤 UART를 연결한다.
 - E-ink EN은 active high로 정의하고 부팅 초기에 LOW로 비활성화한다. 공식 패널 자료에 따라 BUSY active high, RESET과 CS active low인 SSD1685 드라이버를 연결하고 InkHUD 빌드를 활성화했다.
 - 일반 화면은 검증 예제의 프로필 3인 전체 `0xF7`, 부분 `0xDC`, white border `0x01`을 사용한다. 메뉴 안에서는 `0xF4` 기준 프레임 뒤 reset과 전원 차단 없이 `0x1C` 부분 갱신을 이어서 사용한다. 빠른 갱신 fallback은 공식 1.5초 `0xC7` 시퀀스다.
 - 일반 화면 갱신과 메뉴 종료 뒤 deep sleep, SPI 종료, 신호 핀 high-Z와 TPS22919 OFF를 수행한다. 메뉴가 열린 동안에는 다음 입력을 위해 패널 세션을 유지한다. Applet 전환도 마지막 입력부터 5초 동안 세션을 유지하고, 유휴 종료 시 추가 갱신 없이 전원을 정리한다. BUSY timeout에는 추가 명령 전송 없이 즉시 전원 차단 경로를 사용한다.
@@ -95,7 +95,7 @@ InkHUD와 GDEY0266T90H 드라이버를 연결한다.
 - 두 LED는 active high로 정의하고 부팅 초기에 LOW로 끈다. 각 LED의 최종 펌웨어 역할은 별도로 확정한다.
 - MMA8652FC INT1은 P0.09에 직결하며 push-pull active high, latched interrupt로 설정했다. MCU 입력은 no-pull과 rising edge를 사용한다.
 - BQ25628E `INT`는 외부 pull-up된 open-drain active-low 256 µs pulse 입력으로 정의했다. TI 권장 pull-up은 10 kΩ이며, ISR은 I²C를 사용하지 않고 전원 thread의 flag/status poll만 예약한다.
-- 부팅과 종료 시 GNSS UART 및 E-ink 신호 핀은 pull 없는 기본 입력 상태로 두고, 두 active-high EN은 LOW로 비활성화한다.
+- 부팅·종료와 GNSS 측정 사이에는 GNSS UART 및 E-ink 신호 핀을 pull 없는 기본 입력 상태로 두고, 두 active-high EN을 LOW로 비활성화한다.
 
 빌드 성공은 부트로더 호환성, USB 복구, LoRa RF 동작 또는 전원 안전성을 검증하지 않는다. `wiscore_rak4631` 보드 설정 재사용은 실물 SWD·USB bring-up에서 확인해야 한다.
 
@@ -132,9 +132,9 @@ Tokmas 부품은 Bosch BMP388과 이름만 같고 레지스터 맵과 보정 계
 
 ### ATGM336H GNSS
 
-`src/gps/GPS.*`에 ATGM336H 탐지와 설정 지원이 이미 있다. Ieum variant에서 UART RX/TX, baud rate, 주 전원 EN과 활성 레벨을 정의하고 실제 모듈의 NMEA 출력과 baud rate를 bring-up에서 확인한다.
+`src/gps/GPS.*`의 ATGM336H 탐지와 설정 지원을 사용한다. Ieum variant는 UART RX/TX, 주 전원 EN과 활성 레벨을 정의하고 기본 30분 측정 간격과 최대 5분 fix 탐색 한계를 적용한다. 실제 모듈의 NMEA 출력과 baud rate는 bring-up에서 확인한다.
 
-주 전원은 fix를 얻거나 timeout이 끝난 뒤 차단하고 VBAT 백업은 유지한다. 유효하지 않은 fix로 마지막 정상 위치를 덮어쓰지 않는다.
+주 전원을 켠 뒤 임시 1초 안정화 guard를 두고 UART를 attach한다. fix를 얻거나 timeout이 끝나면 UART를 종료하고 RX/TX를 high-Z로 만든 뒤 주 전원을 차단하며 VBAT 백업은 유지한다. 유효하지 않은 fix로 마지막 정상 위치를 덮어쓰지 않는다. 1초 guard, 최대 탐색 시간과 off-state 역급전은 실기기 측정 후 확정한다.
 
 ## 새로 추가할 드라이버
 

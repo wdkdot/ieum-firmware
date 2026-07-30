@@ -19,10 +19,18 @@ const uint32_t g_ADigitalPinMap[] = {
     // P1
     32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47};
 
+void ieumGnssUartPinsDisconnect()
+{
+    nrf_gpio_cfg_default(IEUM_GNSS_RX_PIN);
+    nrf_gpio_cfg_default(IEUM_GNSS_TX_PIN);
+}
+
 static void setSwitchedPeripheralsOff()
 {
-    const uint32_t pins[] = {IEUM_GNSS_RX_PIN, IEUM_GNSS_TX_PIN, PIN_EINK_SCLK, PIN_EINK_MOSI,
-                             PIN_EINK_CS,      PIN_EINK_DC,      PIN_EINK_RES,  PIN_EINK_BUSY};
+    const uint32_t pins[] = {PIN_EINK_SCLK, PIN_EINK_MOSI, PIN_EINK_CS,
+                             PIN_EINK_DC,   PIN_EINK_RES,  PIN_EINK_BUSY};
+
+    ieumGnssUartPinsDisconnect();
 
     for (const uint32_t pin : pins) {
         nrf_gpio_cfg_default(pin);
