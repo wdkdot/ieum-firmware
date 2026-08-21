@@ -1051,15 +1051,16 @@ void Power::readPowerStatus()
     // is 2.0 to 2.5V, current OCV min is set to 3100 that is large enough.
     //
 
-    if (batteryLevel && powerStatus2.getHasBattery() && !powerStatus2.getHasUSB()) {
-        if (batteryLevel->getBattVoltage() < OCV[NUM_OCV_POINTS - 1]) {
+    if (powerStatus2.getHasBattery() && !powerStatus2.getHasUSB()) {
+        const int reportedBatteryVoltageMv = powerStatus2.getBatteryVoltageMv();
+        if (reportedBatteryVoltageMv >= 0 && reportedBatteryVoltageMv < OCV[NUM_OCV_POINTS - 1]) {
             low_voltage_counter++;
             LOG_DEBUG("Low voltage counter: %d/10", low_voltage_counter);
             if (low_voltage_counter > 10) {
                 LOG_INFO("Low voltage detected, trigger deep sleep");
                 powerFSM.trigger(EVENT_LOW_BATTERY);
             }
-        } else {
+        } else if (reportedBatteryVoltageMv >= 0) {
             low_voltage_counter = 0;
         }
     }
