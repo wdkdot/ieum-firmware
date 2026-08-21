@@ -4,6 +4,8 @@
 
 #ifdef HAS_BQ25628E
 
+#include "PowerStatus.h"
+
 #include <Wire.h>
 #include <stdint.h>
 
@@ -171,7 +173,65 @@ class BQ25628E
 
 extern BQ25628E *bq25628e;
 
+using BQ25628EWakeCallback = void (*)();
+
+struct BQ25628EServiceResult {
+    bool initializedNow = false;
+    bool inputChanged = false;
+    bool inputPresent = false;
+};
+
 bool initBQ25628E(TwoWire &wire);
 bool initBQ25628E(TwoWire &wire, const BQ25628E::Configuration &configuration);
+bool setupBQ25628E(BQ25628EWakeCallback wakeCallback);
+BQ25628EServiceResult serviceBQ25628E();
+void attachBQ25628EInterrupt();
+void detachBQ25628EInterrupt();
+bool requestBQ25628EChargeVoltageLimit(uint16_t voltageMv);
+uint16_t getBQ25628EChargeVoltageLimit();
+
+template <typename BatteryLevelBase> class BQ25628EBatteryLevel final : public BatteryLevelBase
+{
+  public:
+    int getBatteryPercent() override { return -1; }
+
+    uint16_t getBattVoltage() override { return hasValidMeasurement() ? bq25628e->measurements().batteryVoltageMv : 0; }
+
+    bool isBatteryConnect() override { return hasValidMeasurement() && !bq25628e->hasInput(); }
+
+    bool isVbusIn() override { return hasValidStatus() && bq25628e->hasInput(); }
+
+    bool isCharging() override { return hasValidStatus() && bq25628e->isCharging(); }
+
+    void updatePowerStatus(meshtastic::OptionalBool &hasBattery, meshtastic::OptionalBool &usbPowered,
+                           meshtastic::OptionalBool &isChargingNow, int32_t &batteryVoltageMv) const
+    {
+        if (bq25628e == nullptr) {
+            return;
+        }
+        if (!hasValidStatus()) {
+#ifdef NRF_APM
+            isChargingNow = meshtastic::OptUnknown;
+#endif
+            return;
+        }
+
+        const bool inputPresent = bq25628e->hasInput();
+        hasBattery = meshtastic::OptUnknown;
+        usbPowered = inputPresent ? meshtastic::OptTrue : meshtastic::OptFalse;
+        isChargingNow = bq25628e->isCharging() ? meshtastic::OptTrue : meshtastic::OptFalse;
+        if (bq25628e->measurements().valid) {
+            batteryVoltageMv = bq25628e->measurements().batteryVoltageMv;
+            if (!inputPresent) {
+                hasBattery = meshtastic::OptTrue;
+            }
+        }
+    }
+
+  private:
+    bool hasValidStatus() const { return bq25628e != nullptr && bq25628e->lastStatusReadSucceeded(); }
+
+    bool hasValidMeasurement() const { return hasValidStatus() && bq25628e->measurements().valid; }
+};
 
 #endif // HAS_BQ25628E

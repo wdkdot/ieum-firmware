@@ -163,8 +163,6 @@ src/motion/MMA8652FCSensor.cpp
 ```text
 src/power/BQ25628E.h
 src/power/BQ25628E.cpp
-src/power/BQ25628ESettings.h
-src/power/BQ25628ESettings.cpp
 ```
 
 구현한 초기 드라이버 범위:

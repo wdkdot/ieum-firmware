@@ -2,8 +2,15 @@
 
 #ifdef HAS_BQ25628E
 
-#include <Arduino.h>
+#include "FSCommon.h"
+#include "SPILock.h"
+#include "SafeFile.h"
+#include "concurrency/LockGuard.h"
 #include "mesh/Throttle.h"
+#include <Arduino.h>
+
+#include <atomic>
+#include <stddef.h>
 
 namespace
 {
@@ -57,6 +64,32 @@ constexpr uint8_t REVISION_MASK = 0x07;
 constexpr uint8_t I2C_START_GAP_US = 100;
 constexpr uint16_t ADC_TIMEOUT_MS = 150;
 constexpr uint8_t MAX_CONSECUTIVE_MEASUREMENT_FAILURES = 3;
+constexpr char SETTINGS_FILE[] = "/prefs/bq25628e.dat";
+constexpr uint32_t SETTINGS_MAGIC = 0x42513238U; // "BQ28"
+constexpr uint16_t SETTINGS_VERSION = 1;
+constexpr uint16_t BATTERY_CARE_VOLTAGE_MV = 4000;
+constexpr uint16_t FULL_CHARGE_VOLTAGE_MV = 4200;
+
+struct SettingsRecord {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t chargeVoltageLimitMv;
+    uint32_t checksum;
+};
+
+static_assert(offsetof(SettingsRecord, checksum) == 8U);
+static_assert(sizeof(SettingsRecord) == 12U);
+
+std::atomic<uint16_t> chargeVoltageLimitMv{BQ25628E_CHARGE_VOLTAGE_LIMIT_MV};
+std::atomic<uint16_t> pendingChargeVoltageLimitMv{BQ25628E_CHARGE_VOLTAGE_LIMIT_MV};
+std::atomic<bool> chargeVoltageRequestPending{false};
+BQ25628EWakeCallback wakeCallback = nullptr;
+bool initializationFailed = false;
+bool communicationFailed = false;
+bool measurementFailed = false;
+bool vbusKnown = false;
+bool previousVbus = false;
+uint8_t previousFaultStatus = 0;
 
 constexpr uint16_t encodeChargeCurrent(uint16_t currentMa)
 {
@@ -104,6 +137,111 @@ static_assert(signExtend(0x3FFF, 14) == -1);
 static_assert(signExtend(0x1FFF, 14) == 8191);
 static_assert(scaleRounded(0x04EB, 397) == 4998);
 static_assert(scaleRounded(0x07CF, 199) == 3978);
+
+bool isSupportedChargeVoltage(uint16_t voltageMv)
+{
+    return voltageMv == BATTERY_CARE_VOLTAGE_MV || voltageMv == FULL_CHARGE_VOLTAGE_MV;
+}
+
+uint32_t calculateSettingsChecksum(const SettingsRecord &record)
+{
+    uint32_t checksum = 2166136261U;
+    const auto *bytes = reinterpret_cast<const uint8_t *>(&record);
+    for (size_t i = 0; i < offsetof(SettingsRecord, checksum); i++) {
+        checksum ^= bytes[i];
+        checksum *= 16777619U;
+    }
+    return checksum;
+}
+
+bool loadChargeVoltageLimit(uint16_t &voltageMv)
+{
+#ifdef FSCom
+    SettingsRecord record = {};
+
+    concurrency::LockGuard guard(spiLock);
+    auto file = FSCom.open(SETTINGS_FILE, FILE_O_READ);
+    if (!file) {
+        LOG_INFO("No BQ25628E settings found; using %umV", voltageMv);
+        return false;
+    }
+
+    const size_t bytesRead = file.read(reinterpret_cast<uint8_t *>(&record), sizeof(record));
+    const size_t fileSize = file.size();
+    file.close();
+
+    const bool valid = bytesRead == sizeof(record) && fileSize == sizeof(record) && record.magic == SETTINGS_MAGIC &&
+                       record.version == SETTINGS_VERSION && isSupportedChargeVoltage(record.chargeVoltageLimitMv) &&
+                       record.checksum == calculateSettingsChecksum(record);
+    if (!valid) {
+        LOG_WARN("Invalid BQ25628E settings; using %umV", voltageMv);
+        return false;
+    }
+
+    voltageMv = record.chargeVoltageLimitMv;
+    LOG_INFO("Loaded BQ25628E charge voltage limit: %umV", voltageMv);
+    return true;
+#else
+    LOG_WARN("BQ25628E settings require a filesystem; using %umV", voltageMv);
+    return false;
+#endif
+}
+
+bool saveChargeVoltageLimit(uint16_t voltageMv)
+{
+    if (!isSupportedChargeVoltage(voltageMv)) {
+        LOG_WARN("Refusing unsupported BQ25628E charge voltage: %umV", voltageMv);
+        return false;
+    }
+
+#ifdef FSCom
+    SettingsRecord record = {SETTINGS_MAGIC, SETTINGS_VERSION, voltageMv, 0};
+    record.checksum = calculateSettingsChecksum(record);
+
+    {
+        concurrency::LockGuard guard(spiLock);
+        FSCom.mkdir("/prefs");
+    }
+
+    auto file = SafeFile(SETTINGS_FILE, true);
+    size_t bytesWritten = 0;
+    {
+        concurrency::LockGuard guard(spiLock);
+        bytesWritten = file.write(reinterpret_cast<const uint8_t *>(&record), sizeof(record));
+    }
+
+    const bool closeSucceeded = file.close();
+    const bool writeSucceeded = bytesWritten == sizeof(record) && closeSucceeded;
+    uint16_t verifiedVoltageMv = 0;
+    if (!writeSucceeded || !loadChargeVoltageLimit(verifiedVoltageMv) || verifiedVoltageMv != voltageMv) {
+        LOG_WARN("Failed to save BQ25628E charge voltage limit");
+        return false;
+    }
+
+    LOG_INFO("Saved BQ25628E charge voltage limit: %umV", voltageMv);
+    return true;
+#else
+    LOG_WARN("BQ25628E settings require a filesystem");
+    return false;
+#endif
+}
+
+BQ25628E::Configuration makeConfiguration()
+{
+    BQ25628E::Configuration configuration;
+    configuration.chargeVoltageLimitMv = chargeVoltageLimitMv.load();
+    return configuration;
+}
+
+void handleInterrupt()
+{
+    if (bq25628e != nullptr) {
+        bq25628e->notifyInterrupt();
+    }
+    if (wakeCallback != nullptr) {
+        wakeCallback();
+    }
+}
 } // namespace
 
 BQ25628E *bq25628e = nullptr;
@@ -126,6 +264,144 @@ bool initBQ25628E(TwoWire &wire, const BQ25628E::Configuration &configuration)
         return false;
     }
     return true;
+}
+
+bool setupBQ25628E(BQ25628EWakeCallback callback)
+{
+    wakeCallback = callback;
+
+    uint16_t configuredVoltageMv = BQ25628E_CHARGE_VOLTAGE_LIMIT_MV;
+    loadChargeVoltageLimit(configuredVoltageMv);
+    chargeVoltageLimitMv.store(configuredVoltageMv);
+    pendingChargeVoltageLimitMv.store(configuredVoltageMv);
+
+    const bool found = initBQ25628E(BQ25628E_WIRE, makeConfiguration());
+    initializationFailed = !found;
+    if (initializationFailed) {
+        LOG_WARN("BQ25628E initialization failed; retrying from Power thread");
+    }
+    return found;
+}
+
+BQ25628EServiceResult serviceBQ25628E()
+{
+    BQ25628EServiceResult result;
+    if (bq25628e == nullptr) {
+        if (initBQ25628E(BQ25628E_WIRE, makeConfiguration())) {
+            LOG_INFO("BQ25628E initialization recovered");
+            initializationFailed = false;
+            result.initializedNow = true;
+            attachBQ25628EInterrupt();
+        } else if (!initializationFailed) {
+            LOG_WARN("BQ25628E initialization failed; retrying periodically");
+            initializationFailed = true;
+        }
+    }
+
+    if (bq25628e == nullptr) {
+        return result;
+    }
+
+    if (chargeVoltageRequestPending.exchange(false)) {
+        const uint16_t requestedVoltageMv = pendingChargeVoltageLimitMv.load();
+        if (!bq25628e->setChargeVoltageLimit(requestedVoltageMv)) {
+            chargeVoltageLimitMv.store(bq25628e->configuration().chargeVoltageLimitMv);
+            LOG_WARN("BQ25628E failed to apply %umV charge voltage limit", requestedVoltageMv);
+        } else if (!saveChargeVoltageLimit(requestedVoltageMv)) {
+            LOG_WARN("BQ25628E charge voltage changed to %umV but was not persisted", requestedVoltageMv);
+        } else {
+            LOG_INFO("BQ25628E charge voltage limit changed to %umV", requestedVoltageMv);
+        }
+    }
+
+    if (!bq25628e->refreshStatus()) {
+        if (!communicationFailed) {
+            LOG_WARN("BQ25628E status read failed; retaining autonomous charger operation");
+        }
+        communicationFailed = true;
+        return result;
+    }
+
+    if (communicationFailed) {
+        LOG_INFO("BQ25628E communication restored");
+    }
+    communicationFailed = false;
+
+    const bool currentVbus = bq25628e->hasInput();
+    if (vbusKnown && currentVbus != previousVbus) {
+        LOG_INFO("BQ25628E USB %s", currentVbus ? "connected" : "disconnected");
+        result.inputChanged = true;
+        result.inputPresent = currentVbus;
+    }
+    previousVbus = currentVbus;
+    vbusKnown = true;
+
+    const auto &flags = bq25628e->interruptFlags();
+    if (flags.hasNonAdcEvent()) {
+        LOG_DEBUG("BQ25628E flags: status0=0x%02x status1=0x%02x fault=0x%02x", flags.status0, flags.status1, flags.fault);
+    }
+
+    const uint8_t currentFaultStatus = bq25628e->status().faultStatus;
+    if (currentFaultStatus != previousFaultStatus) {
+        if (currentFaultStatus != 0U) {
+            LOG_WARN("BQ25628E fault status changed to 0x%02x", currentFaultStatus);
+        } else {
+            LOG_INFO("BQ25628E fault status cleared");
+        }
+        previousFaultStatus = currentFaultStatus;
+    }
+
+    if (!bq25628e->updateMeasurements()) {
+        if (!measurementFailed) {
+            LOG_WARN("BQ25628E ADC conversion failed; charger status remains available");
+        }
+        measurementFailed = true;
+    } else {
+        if (measurementFailed) {
+            LOG_INFO("BQ25628E ADC measurements restored");
+        }
+        measurementFailed = false;
+    }
+    return result;
+}
+
+void attachBQ25628EInterrupt()
+{
+#ifdef BQ25628E_INT_PIN
+    if (bq25628e != nullptr) {
+        pinMode(BQ25628E_INT_PIN, INPUT);
+        attachInterrupt(BQ25628E_INT_PIN, handleInterrupt, BQ25628E_INT_ACTIVE == LOW ? FALLING : RISING);
+    }
+#endif
+}
+
+void detachBQ25628EInterrupt()
+{
+#ifdef BQ25628E_INT_PIN
+    if (bq25628e != nullptr) {
+        detachInterrupt(BQ25628E_INT_PIN);
+    }
+#endif
+}
+
+bool requestBQ25628EChargeVoltageLimit(uint16_t voltageMv)
+{
+    if (!isSupportedChargeVoltage(voltageMv) || bq25628e == nullptr || !bq25628e->isReady()) {
+        return false;
+    }
+
+    pendingChargeVoltageLimitMv.store(voltageMv);
+    chargeVoltageLimitMv.store(voltageMv);
+    chargeVoltageRequestPending.store(true);
+    if (wakeCallback != nullptr) {
+        wakeCallback();
+    }
+    return true;
+}
+
+uint16_t getBQ25628EChargeVoltageLimit()
+{
+    return chargeVoltageLimitMv.load();
 }
 
 bool BQ25628E::readRegister8(uint8_t reg, uint8_t &value)
@@ -245,8 +521,8 @@ bool BQ25628E::writeConfiguration(const Configuration &configuration)
     const uint8_t externalIlim = configuration.externalInputCurrentLimitEnabled ? EXTERNAL_ILIM_ENABLE_MASK : 0U;
 
     // Any I2C write enters host mode and starts the POR watchdog, so configure it first.
-    return updateRegister8(REG_CHARGER_CONTROL0,
-                           static_cast<uint8_t>(CHARGE_ENABLE_MASK | WATCHDOG_RESET_MASK | WATCHDOG_MASK), chargerControl0) &&
+    return updateRegister8(REG_CHARGER_CONTROL0, static_cast<uint8_t>(CHARGE_ENABLE_MASK | WATCHDOG_RESET_MASK | WATCHDOG_MASK),
+                           chargerControl0) &&
            updateRegister16(REG_INPUT_CURRENT_LIMIT, IINDPM_MASK, encodeInputCurrent(configuration.inputCurrentLimitMa)) &&
            updateRegister16(REG_CHARGE_CURRENT_LIMIT, ICHG_MASK, encodeChargeCurrent(configuration.chargeCurrentLimitMa)) &&
            updateRegister16(REG_CHARGE_VOLTAGE_LIMIT, VREG_MASK, encodeChargeVoltage(configuration.chargeVoltageLimitMv)) &&
@@ -464,8 +740,7 @@ bool BQ25628E::applyAdcValues(const AdcRawValues &raw)
     measurements_.pmidVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vpmid >> 2) & 0x1FFFU), 397);
     measurements_.batteryVoltageMv = scaleRounded(rawBatteryVoltage, 199);
     measurements_.systemVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vsys >> 1) & 0x0FFFU), 199);
-    measurements_.thermistorPermille =
-        static_cast<uint16_t>((static_cast<uint32_t>(raw.ts & 0x0FFFU) * 961U + 500U) / 1000U);
+    measurements_.thermistorPermille = static_cast<uint16_t>((static_cast<uint32_t>(raw.ts & 0x0FFFU) * 961U + 500U) / 1000U);
     measurements_.dieTemperatureDeciC = static_cast<int16_t>(signExtend(raw.tdie & 0x0FFFU, 12) * 5);
 
     measurements_.valid = true;

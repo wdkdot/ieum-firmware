@@ -96,11 +96,6 @@ class Power : public concurrency::OSThread
     void setStatusHandler(meshtastic::PowerStatus *handler) { statusHandler = handler; }
     const uint16_t OCV[11] = {OCV_ARRAY};
 
-#ifdef HAS_BQ25628E
-    bool requestBQ25628EChargeVoltageLimit(uint16_t voltageMv);
-    uint16_t getBQ25628EChargeVoltageLimit() const;
-#endif
-
 #ifdef ARCH_ESP32
     int beforeLightSleep(void *unused);
     int afterLightSleep(esp_sleep_wakeup_cause_t cause);
@@ -130,9 +125,6 @@ class Power : public concurrency::OSThread
   private:
     void shutdown();
     void reboot();
-#ifdef HAS_BQ25628E
-    void attachBQ25628EInterrupt();
-#endif
     // open circuit voltage lookup table
     uint8_t low_voltage_counter;
     uint32_t lastLogTime = 0;
