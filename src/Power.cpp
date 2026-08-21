@@ -23,6 +23,7 @@
 #include "main.h"
 #include "meshUtils.h"
 #include "power/BQ25628E.h"
+#include "power/BQ25628EBatteryLevel.h"
 #include "power/BQ25628ESettings.h"
 #include "power/PowerHAL.h"
 #include "power/SGM41562.h"
@@ -216,6 +217,10 @@ BQ25628E::Configuration makeBQ25628EConfiguration()
  * If this board has a battery level sensor, set this to a valid implementation
  */
 static HasBatteryLevel *batteryLevel; // Default to NULL for no battery level sensor
+
+#ifdef HAS_BQ25628E
+static BQ25628EBatteryLevel<HasBatteryLevel> bq25628eBatteryLevel;
+#endif
 
 #ifdef BATTERY_PIN
 
@@ -770,7 +775,10 @@ bool Power::setup()
 #endif
     }
 #ifdef HAS_BQ25628E
-    found = found || bq25628eFound;
+    if (bq25628eFound) {
+        batteryLevel = &bq25628eBatteryLevel;
+        found = true;
+    }
 #endif
     attachPowerInterrupts();
     enabled = found;
@@ -962,6 +970,7 @@ void Power::readPowerStatus()
 
 #ifdef HAS_BQ25628E
     if (bq25628e != nullptr && bq25628e->lastStatusReadSucceeded()) {
+        hasBattery = OptUnknown;
         usbPowered = bq25628e->hasInput() ? OptTrue : OptFalse;
         isChargingNow = bq25628e->isCharging() ? OptTrue : OptFalse;
         if (bq25628e->measurements().valid) {
@@ -1051,16 +1060,15 @@ void Power::readPowerStatus()
     // is 2.0 to 2.5V, current OCV min is set to 3100 that is large enough.
     //
 
-    if (powerStatus2.getHasBattery() && !powerStatus2.getHasUSB()) {
-        const int reportedBatteryVoltageMv = powerStatus2.getBatteryVoltageMv();
-        if (reportedBatteryVoltageMv >= 0 && reportedBatteryVoltageMv < OCV[NUM_OCV_POINTS - 1]) {
+    if (batteryLevel && powerStatus2.getHasBattery() && !powerStatus2.getHasUSB()) {
+        if (batteryLevel->getBattVoltage() < OCV[NUM_OCV_POINTS - 1]) {
             low_voltage_counter++;
             LOG_DEBUG("Low voltage counter: %d/10", low_voltage_counter);
             if (low_voltage_counter > 10) {
                 LOG_INFO("Low voltage detected, trigger deep sleep");
                 powerFSM.trigger(EVENT_LOW_BATTERY);
             }
-        } else if (reportedBatteryVoltageMv >= 0) {
+        } else {
             low_voltage_counter = 0;
         }
     }
@@ -1073,6 +1081,7 @@ int32_t Power::runOnce()
         if (initBQ25628E(BQ25628E_WIRE, makeBQ25628EConfiguration())) {
             LOG_INFO("BQ25628E initialization recovered");
             bq25628eInitializationFailed = false;
+            batteryLevel = &bq25628eBatteryLevel;
             attachBQ25628EInterrupt();
         } else if (!bq25628eInitializationFailed) {
             LOG_WARN("BQ25628E initialization failed; retrying periodically");
