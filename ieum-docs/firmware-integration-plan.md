@@ -163,8 +163,6 @@ src/motion/MMA8652FCSensor.cpp
 ```text
 src/power/BQ25628E.h
 src/power/BQ25628E.cpp
-src/power/BQ25628ESettings.h
-src/power/BQ25628ESettings.cpp
 ```
 
 구현한 초기 드라이버 범위:
@@ -180,7 +178,7 @@ src/power/BQ25628ESettings.cpp
 
 제품 포크 초기에는 `IEUM` 빌드에서만 생성되는 Ieum 전원 관리 계층으로 연결한다. 주소 `0x6A`와 part number `4`를 확인하고, 16-bit 레지스터는 little-endian으로 처리한다. 읽기는 register address 뒤 repeated START를 사용하는 단일 transaction이며 START 사이에 100 µs 간격을 둔다. read-to-clear interrupt flag는 startup과 주기적 poll에서 읽고, ISR은 thread 실행만 예약한다.
 
-초기 설정은 입력 500 mA, 충전 320 mA/4.00 V, 6.3 V input OVP, 외부 ILIM 활성, watchdog 비활성이다. InkHUD Power 메뉴에서 4.00 V battery-care 모드와 4.20 V full-charge 모드를 전환하며, 성공한 선택은 전용 versioned 설정 파일에 저장한다. 저장값은 BQ25628E 초기화 전에 읽고, 파일이 없거나 손상되면 4.00 V를 사용한다. 첫 I²C 쓰기는 watchdog 비활성화이며 이후 충전 설정을 적용한다. ADC는 `REG0x27=0x00`으로 모든 채널을 활성화한 9-bit one-shot을 사용하며, 실기기에서 확인한 변환 시간을 수용하도록 실제 경과시간 기준 150 ms timeout을 둔다. 일시적인 ADC 실패에는 이전 정상값을 유지하고 연속 실패는 측정 불가로 처리하며, 초기 I²C 탐색 실패도 주기적으로 재시도한다. 설정은 주기적으로 read-back해 adapter 제거로 초기화되는 입력 제한이나 예상하지 못한 reset을 복원한다. Ship/Shutdown API는 제공하지만 일반 종료에 연결하지 않는다. 통신 실패 시 칩의 autonomous charger 동작을 유지하며 LoRa, BLE와 USB 부팅을 막지 않는다.
+초기 설정은 입력 500 mA, 충전 320 mA/4.00 V, 6.3 V input OVP, 외부 ILIM 활성, watchdog 비활성이다. InkHUD Power 메뉴에서 4.00 V battery-care 모드와 4.20 V full-charge 모드를 전환하며, 성공한 선택은 전용 versioned 설정 파일에 저장한다. 저장값은 BQ25628E 초기화 전에 읽고, 파일이 없거나 손상되면 4.00 V를 사용한다. 첫 I²C 쓰기는 watchdog 비활성화이며 이후 충전 설정을 적용한다. ADC는 9-bit one-shot을 사용하고, 배터리 단독 구동 중에는 3.2 V 아래에서도 VBAT를 계속 측정할 수 있도록 TS ADC만 비활성화한다. 실기기에서 확인한 변환 시간을 수용하도록 실제 경과시간 기준 150 ms timeout을 둔다. 일시적인 ADC 실패에는 이전 정상값을 유지하고 연속 실패는 측정 불가로 처리하며, 초기 I²C 탐색 실패도 주기적으로 재시도한다. 설정은 주기적으로 read-back해 adapter 제거로 초기화되는 입력 제한이나 예상하지 못한 reset을 복원한다. Ship/Shutdown API는 제공하지만 일반 종료에 연결하지 않는다. 통신 실패 시 칩의 autonomous charger 동작을 유지하며 LoRa, BLE와 USB 부팅을 막지 않는다.
 
 안정화 후 Meshtastic 공통 PMIC 구조로의 통합을 검토한다. 실기기 충전 전에는 배터리 최대 전압·전류와 TS 동작을 확인하고, ADC 정확도와 USB 입력 제한을 측정해 설정을 확정한다.
 

@@ -23,14 +23,9 @@
 #include "main.h"
 #include "meshUtils.h"
 #include "power/BQ25628E.h"
-#include "power/BQ25628ESettings.h"
 #include "power/PowerHAL.h"
 #include "power/SGM41562.h"
 #include "sleep.h"
-
-#ifdef HAS_BQ25628E
-#include <atomic>
-#endif
 
 #if defined(ARCH_PORTDUINO)
 #include "api/WiFiServerAPI.h"
@@ -187,24 +182,6 @@ Power *power;
 
 using namespace meshtastic;
 
-#ifdef HAS_BQ25628E
-namespace
-{
-BQ25628ESettings bq25628eSettings;
-std::atomic<uint16_t> bq25628eChargeVoltageLimitMv{BQ25628E_CHARGE_VOLTAGE_LIMIT_MV};
-std::atomic<uint16_t> bq25628ePendingChargeVoltageLimitMv{BQ25628E_CHARGE_VOLTAGE_LIMIT_MV};
-std::atomic<bool> bq25628eChargeVoltageRequestPending{false};
-bool bq25628eInitializationFailed = false;
-
-BQ25628E::Configuration makeBQ25628EConfiguration()
-{
-    BQ25628E::Configuration configuration;
-    configuration.chargeVoltageLimitMv = bq25628eChargeVoltageLimitMv.load();
-    return configuration;
-}
-} // namespace
-#endif
-
 // NRF52 has AREF_VOLTAGE defined in architecture.h but
 // make sure it's included. If something is wrong with NRF52
 // definition - compilation will fail on missing definition
@@ -216,6 +193,10 @@ BQ25628E::Configuration makeBQ25628EConfiguration()
  * If this board has a battery level sensor, set this to a valid implementation
  */
 static HasBatteryLevel *batteryLevel; // Default to NULL for no battery level sensor
+
+#ifdef HAS_BQ25628E
+static BQ25628EBatteryLevel<HasBatteryLevel> bq25628eBatteryLevel;
+#endif
 
 #ifdef BATTERY_PIN
 
@@ -730,19 +711,6 @@ bool Power::analogInit()
  */
 bool Power::setup()
 {
-#ifdef HAS_BQ25628E
-    uint16_t chargeVoltageLimitMv = BQ25628E_CHARGE_VOLTAGE_LIMIT_MV;
-    bq25628eSettings.load(chargeVoltageLimitMv);
-    bq25628eChargeVoltageLimitMv.store(chargeVoltageLimitMv);
-    bq25628ePendingChargeVoltageLimitMv.store(chargeVoltageLimitMv);
-
-    // The charger remains autonomous if probing fails, so a missing PMIC must not block startup.
-    const bool bq25628eFound = initBQ25628E(BQ25628E_WIRE, makeBQ25628EConfiguration());
-    bq25628eInitializationFailed = !bq25628eFound;
-    if (bq25628eInitializationFailed) {
-        LOG_WARN("BQ25628E initialization failed; retrying from Power thread");
-    }
-#endif
 #ifdef HAS_SGM41562
     // Initialize the charger early so AnalogBatteryLevel can read charging
     // state from it. The charger does not provide battery voltage / percent —
@@ -770,7 +738,13 @@ bool Power::setup()
 #endif
     }
 #ifdef HAS_BQ25628E
-    found = found || bq25628eFound;
+    if (setupBQ25628E([] {
+            power->setIntervalFromNow(0);
+            runASAP = true;
+        })) {
+        batteryLevel = &bq25628eBatteryLevel;
+        found = true;
+    }
 #endif
     attachPowerInterrupts();
     enabled = found;
@@ -785,27 +759,6 @@ bool Power::setup()
 
     return found;
 }
-
-#ifdef HAS_BQ25628E
-bool Power::requestBQ25628EChargeVoltageLimit(uint16_t voltageMv)
-{
-    if (!BQ25628ESettings::isSupportedVoltage(voltageMv) || bq25628e == nullptr || !bq25628e->isReady()) {
-        return false;
-    }
-
-    bq25628ePendingChargeVoltageLimitMv.store(voltageMv);
-    bq25628eChargeVoltageLimitMv.store(voltageMv);
-    bq25628eChargeVoltageRequestPending.store(true);
-    setIntervalFromNow(0);
-    runASAP = true;
-    return true;
-}
-
-uint16_t Power::getBQ25628EChargeVoltageLimit() const
-{
-    return bq25628eChargeVoltageLimitMv.load();
-}
-#endif
 
 void Power::powerCommandsCheck()
 {
@@ -945,36 +898,15 @@ void Power::readPowerStatus()
 
     // If changed to DISCONNECTED
     if (nrf_usb_state == NRFX_POWER_USB_STATE_DISCONNECTED)
-        usbPowered = OptFalse;
+        isChargingNow = usbPowered = OptFalse;
     // If changed to CONNECTED / READY
     else
-        usbPowered = OptTrue;
-
-#ifndef HAS_BQ25628E
-    isChargingNow = usbPowered;
-#else
-    if (bq25628e == nullptr) {
-        isChargingNow = usbPowered;
-    }
-#endif
+        isChargingNow = usbPowered = OptTrue;
 
 #endif
 
 #ifdef HAS_BQ25628E
-    if (bq25628e != nullptr && bq25628e->lastStatusReadSucceeded()) {
-        usbPowered = bq25628e->hasInput() ? OptTrue : OptFalse;
-        isChargingNow = bq25628e->isCharging() ? OptTrue : OptFalse;
-        if (bq25628e->measurements().valid) {
-            // The charger has no reliable battery-presence bit, so voltage alone must not change hasBattery.
-            batteryVoltageMv = bq25628e->measurements().batteryVoltageMv;
-            if (!bq25628e->hasInput()) {
-                hasBattery = OptTrue;
-                batteryChargePercent = clamp((int)(((batteryVoltageMv - (OCV[NUM_OCV_POINTS - 1] * NUM_CELLS)) * 1e2) /
-                                                   ((OCV[0] * NUM_CELLS) - (OCV[NUM_OCV_POINTS - 1] * NUM_CELLS))),
-                                             0, 100);
-            }
-        }
-    }
+    bq25628eBatteryLevel.updatePowerStatus(hasBattery, usbPowered, isChargingNow, batteryVoltageMv);
 #endif
 
     // Notify any status instances that are observing us
@@ -1068,83 +1000,12 @@ void Power::readPowerStatus()
 int32_t Power::runOnce()
 {
 #ifdef HAS_BQ25628E
-    if (bq25628e == nullptr) {
-        if (initBQ25628E(BQ25628E_WIRE, makeBQ25628EConfiguration())) {
-            LOG_INFO("BQ25628E initialization recovered");
-            bq25628eInitializationFailed = false;
-            attachBQ25628EInterrupt();
-        } else if (!bq25628eInitializationFailed) {
-            LOG_WARN("BQ25628E initialization failed; retrying periodically");
-            bq25628eInitializationFailed = true;
-        }
+    const BQ25628EServiceResult bq25628eResult = serviceBQ25628E();
+    if (bq25628eResult.initializedNow) {
+        batteryLevel = &bq25628eBatteryLevel;
     }
-
-    if (bq25628e != nullptr) {
-        static bool communicationFailed = false;
-        static bool measurementFailed = false;
-        static bool vbusKnown = false;
-        static bool previousVbus = false;
-        static uint8_t previousFaultStatus = 0;
-
-        if (bq25628eChargeVoltageRequestPending.exchange(false)) {
-            const uint16_t requestedVoltageMv = bq25628ePendingChargeVoltageLimitMv.load();
-            if (!bq25628e->setChargeVoltageLimit(requestedVoltageMv)) {
-                bq25628eChargeVoltageLimitMv.store(bq25628e->configuration().chargeVoltageLimitMv);
-                LOG_WARN("BQ25628E failed to apply %umV charge voltage limit", requestedVoltageMv);
-            } else if (!bq25628eSettings.save(requestedVoltageMv)) {
-                LOG_WARN("BQ25628E charge voltage changed to %umV but was not persisted", requestedVoltageMv);
-            } else {
-                LOG_INFO("BQ25628E charge voltage limit changed to %umV", requestedVoltageMv);
-            }
-        }
-
-        if (!bq25628e->refreshStatus()) {
-            if (!communicationFailed) {
-                LOG_WARN("BQ25628E status read failed; retaining autonomous charger operation");
-            }
-            communicationFailed = true;
-        } else {
-            if (communicationFailed) {
-                LOG_INFO("BQ25628E communication restored");
-            }
-            communicationFailed = false;
-
-            const bool currentVbus = bq25628e->hasInput();
-            if (vbusKnown && currentVbus != previousVbus) {
-                LOG_INFO("BQ25628E USB %s", currentVbus ? "connected" : "disconnected");
-                powerFSM.trigger(currentVbus ? EVENT_POWER_CONNECTED : EVENT_POWER_DISCONNECTED);
-            }
-            previousVbus = currentVbus;
-            vbusKnown = true;
-
-            const auto &flags = bq25628e->interruptFlags();
-            if (flags.hasNonAdcEvent()) {
-                LOG_DEBUG("BQ25628E flags: status0=0x%02x status1=0x%02x fault=0x%02x", flags.status0, flags.status1,
-                          flags.fault);
-            }
-
-            const uint8_t currentFaultStatus = bq25628e->status().faultStatus;
-            if (currentFaultStatus != previousFaultStatus) {
-                if (currentFaultStatus != 0U) {
-                    LOG_WARN("BQ25628E fault status changed to 0x%02x", currentFaultStatus);
-                } else {
-                    LOG_INFO("BQ25628E fault status cleared");
-                }
-                previousFaultStatus = currentFaultStatus;
-            }
-
-            if (!bq25628e->updateMeasurements()) {
-                if (!measurementFailed) {
-                    LOG_WARN("BQ25628E ADC conversion failed; charger status remains available");
-                }
-                measurementFailed = true;
-            } else {
-                if (measurementFailed) {
-                    LOG_INFO("BQ25628E ADC measurements restored");
-                }
-                measurementFailed = false;
-            }
-        }
+    if (bq25628eResult.inputChanged) {
+        powerFSM.trigger(bq25628eResult.inputPresent ? EVENT_POWER_CONNECTED : EVENT_POWER_DISCONNECTED);
     }
 #endif
 
@@ -1266,29 +1127,10 @@ void Power::attachPowerInterrupts()
             FALLING);
     }
 #endif
-#ifdef BQ25628E_INT_PIN
+#ifdef HAS_BQ25628E
     attachBQ25628EInterrupt();
 #endif
 }
-
-#ifdef HAS_BQ25628E
-void Power::attachBQ25628EInterrupt()
-{
-#ifdef BQ25628E_INT_PIN
-    if (bq25628e != nullptr) {
-        pinMode(BQ25628E_INT_PIN, INPUT);
-        attachInterrupt(
-            BQ25628E_INT_PIN,
-            [] {
-                bq25628e->notifyInterrupt();
-                power->setIntervalFromNow(0);
-                runASAP = true;
-            },
-            BQ25628E_INT_ACTIVE == LOW ? FALLING : RISING);
-    }
-#endif
-}
-#endif
 
 /*
  * Detach the "normal" button interrupts.
@@ -1310,10 +1152,8 @@ void Power::detachPowerInterrupts()
         detachInterrupt(PMU_IRQ);
     }
 #endif
-#ifdef BQ25628E_INT_PIN
-    if (bq25628e != nullptr) {
-        detachInterrupt(BQ25628E_INT_PIN);
-    }
+#ifdef HAS_BQ25628E
+    detachBQ25628EInterrupt();
 #endif
 }
 

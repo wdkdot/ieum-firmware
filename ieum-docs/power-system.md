@@ -48,9 +48,10 @@ Ieum에서 기대하는 역할:
 - 첫 I²C 쓰기에서 `REG0x16[1:0]`을 `00b`로 설정해 호스트 watchdog을 비활성화하고, 칩의 safety timer, TS 감시, thermal regulation과 termination 기본 기능은 변경하지 않는다.
 - InkHUD의 `Node Config → Power`에서 충전 상한을 4.00 V와 4.20 V 사이에서 전환하며, 성공한 선택은 `/prefs/bq25628e.dat`에 저장해 재부팅 후에도 적용한다.
 - 저장 파일이 없거나 버전·checksum·값 검증에 실패하면 4.00 V로 복귀한다.
-- ADC는 `REG0x27=0x00`으로 모든 채널을 활성화한 9-bit one-shot을 사용한다. 실기기에서 전체 채널 변환이 기존 60회 polling 제한을 넘는 것을 확인했으므로 실제 경과시간 기준 150 ms timeout을 적용하고, 완료되면 즉시 대기를 끝낸다.
+- ADC는 9-bit one-shot을 사용한다. USB 입력 중에는 모든 채널을 측정하고, 배터리 단독 구동 중에는 3.2 V 아래에서도 VBAT를 계속 측정할 수 있도록 TS ADC만 비활성화한다. 실기기에서 전체 채널 변환이 기존 60회 polling 제한을 넘는 것을 확인했으므로 실제 경과시간 기준 150 ms timeout을 적용하고, 완료되면 즉시 대기를 끝낸다.
 - ADC 또는 초기 I²C 탐색이 실패하면 실제 0 V로 게시하지 않고 이전 정상값을 제한적으로 유지하며, BQ25628E 탐색을 주기적으로 재시도한다.
 - `INT`가 누락되더라도 startup과 주기적 poll에서 read-to-clear flag, status와 fault를 읽는다. ADC 완료 인터럽트만 mask한다.
+- 유효한 VBAT 측정값은 전용 배터리 레벨 어댑터를 통해 기존 배터리 전압 공급원과 같은 Power 경로에 등록한다. USB 입력이 없고 전압이 기본 OCV 최저값 3.10 V보다 11회 연속 낮으면 기존 저전압 보호가 nRF52840을 System OFF로 전환한다.
 - Ship/Shutdown은 일반 종료 경로에서 자동 실행하지 않고, 별도 확인을 거친 명시적 호출로만 요청한다.
 
 노란색 충전 LED를 제어하는 `STAT`도 open-drain 출력이며 충전 중 LOW다. 이는 nRF52840이 직접 구동하는 active-high LED 2개와 구분한다. BQ25628E는 배터리 유무를 신뢰성 있게 판별하는 전용 bit가 없으므로 USB 입력 중에는 ADC의 VBAT 값만으로 배터리 장착 여부를 추정하지 않는다. USB 입력이 없고 유효한 VBAT가 측정되면 실행 중인 Ieum의 전원이 배터리에서 공급되는 것으로 판정한다.

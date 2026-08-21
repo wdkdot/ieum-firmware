@@ -11,6 +11,7 @@
 #include "main.h"
 #include "mesh/generated/meshtastic/deviceonly.pb.h"
 #include "power.h"
+#include "power/BQ25628E.h"
 #include <RadioLibInterface.h>
 #include <target_specific.h>
 #if defined(ARCH_ESP32) && HAS_WIFI
@@ -511,9 +512,9 @@ void InkHUD::MenuApplet::execute(MenuItem item)
             break;
         }
 
-        const uint16_t currentVoltageMv = power->getBQ25628EChargeVoltageLimit();
+        const uint16_t currentVoltageMv = getBQ25628EChargeVoltageLimit();
         const uint16_t requestedVoltageMv = currentVoltageMv == 4000U ? 4200U : 4000U;
-        if (!power->requestBQ25628EChargeVoltageLimit(requestedVoltageMv)) {
+        if (!requestBQ25628EChargeVoltageLimit(requestedVoltageMv)) {
             LOG_WARN("BQ25628E charge voltage change to %umV was rejected", requestedVoltageMv);
         }
         break;
@@ -1042,10 +1043,10 @@ void InkHUD::MenuApplet::showPage(MenuPage page)
 #ifdef HAS_BQ25628E
         if (power != nullptr) {
             char buf[32];
-            snprintf(buf, sizeof(buf), "Charge Limit: %.2f V", power->getBQ25628EChargeVoltageLimit() / 1000.0f);
+            snprintf(buf, sizeof(buf), "Charge Limit: %.2f V", getBQ25628EChargeVoltageLimit() / 1000.0f);
             nodeConfigLabels.emplace_back(buf);
-            items.push_back(MenuItem(nodeConfigLabels.back().c_str(), MenuAction::TOGGLE_BATTERY_CARE,
-                                     MenuPage::NODE_CONFIG_POWER));
+            items.push_back(
+                MenuItem(nodeConfigLabels.back().c_str(), MenuAction::TOGGLE_BATTERY_CARE, MenuPage::NODE_CONFIG_POWER));
         }
 #endif
         // ADC Multiplier
