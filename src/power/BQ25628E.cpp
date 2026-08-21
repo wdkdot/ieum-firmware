@@ -56,7 +56,7 @@ constexpr uint8_t ADC_DONE_MASK = 0x40;
 constexpr uint8_t ADC_ONE_SHOT_9_BIT = 0xF0;
 constexpr uint8_t ADC_ENABLE_MASK = 0x80;
 constexpr uint8_t ADC_CONTROL_MASK = 0xFC;
-constexpr uint8_t ADC_ALL_CHANNELS = 0x00;
+constexpr uint8_t TS_ADC_DISABLE_MASK = 0x04;
 constexpr uint8_t EXPECTED_PART_NUMBER = 4;
 constexpr uint8_t PART_NUMBER_MASK = 0x38;
 constexpr uint8_t PART_NUMBER_SHIFT = 3;
@@ -684,8 +684,11 @@ bool BQ25628E::updateMeasurements()
 
 bool BQ25628E::performAdcConversion(AdcRawValues &raw)
 {
+    // TS ADC needs REGN, which is unavailable below 3.2 V in battery-only mode.
+    const bool thermistorEnabled = hasInput();
+    const uint8_t disabledChannels = thermistorEnabled ? 0U : TS_ADC_DISABLE_MASK;
     if (!updateRegister8(REG_ADC_CONTROL, ADC_ENABLE_MASK, 0U) ||
-        !updateRegister8(REG_ADC_FUNCTION_DISABLE, 0xFFU, ADC_ALL_CHANNELS)) {
+        !updateRegister8(REG_ADC_FUNCTION_DISABLE, 0xFFU, disabledChannels)) {
         return false;
     }
 
@@ -711,16 +714,20 @@ bool BQ25628E::performAdcConversion(AdcRawValues &raw)
         updateRegister8(REG_ADC_CONTROL, ADC_ENABLE_MASK, 0U);
         return false;
     }
-    return readAdcRawValues(raw);
+    return readAdcRawValues(raw, thermistorEnabled);
 }
 
-bool BQ25628E::readAdcRawValues(AdcRawValues &raw)
+bool BQ25628E::readAdcRawValues(AdcRawValues &raw, bool thermistorEnabled)
 {
     raw = {};
-    return readRegister16(REG_IBUS_ADC, raw.ibus) && readRegister16(REG_IBAT_ADC, raw.ibat) &&
-           readRegister16(REG_VBUS_ADC, raw.vbus) && readRegister16(REG_VPMID_ADC, raw.vpmid) &&
-           readRegister16(REG_VBAT_ADC, raw.vbat) && readRegister16(REG_VSYS_ADC, raw.vsys) &&
-           readRegister16(REG_TS_ADC, raw.ts) && readRegister16(REG_TDIE_ADC, raw.tdie);
+    if (!readRegister16(REG_IBUS_ADC, raw.ibus) || !readRegister16(REG_IBAT_ADC, raw.ibat) ||
+        !readRegister16(REG_VBUS_ADC, raw.vbus) || !readRegister16(REG_VPMID_ADC, raw.vpmid) ||
+        !readRegister16(REG_VBAT_ADC, raw.vbat) || !readRegister16(REG_VSYS_ADC, raw.vsys) ||
+        (thermistorEnabled && !readRegister16(REG_TS_ADC, raw.ts)) || !readRegister16(REG_TDIE_ADC, raw.tdie)) {
+        return false;
+    }
+    raw.thermistorValid = thermistorEnabled;
+    return true;
 }
 
 bool BQ25628E::applyAdcValues(const AdcRawValues &raw)
@@ -733,6 +740,7 @@ bool BQ25628E::applyAdcValues(const AdcRawValues &raw)
     measurements_ = {};
     measurements_.inputCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(raw.ibus >> 1), 15) * 2);
     measurements_.batteryCurrentValid = raw.ibat != 0x8000U;
+    measurements_.thermistorValid = raw.thermistorValid;
     if (measurements_.batteryCurrentValid) {
         measurements_.batteryCurrentMa = static_cast<int16_t>(signExtend(static_cast<uint16_t>(raw.ibat >> 2), 14) * 4);
     }
@@ -740,7 +748,9 @@ bool BQ25628E::applyAdcValues(const AdcRawValues &raw)
     measurements_.pmidVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vpmid >> 2) & 0x1FFFU), 397);
     measurements_.batteryVoltageMv = scaleRounded(rawBatteryVoltage, 199);
     measurements_.systemVoltageMv = scaleRounded(static_cast<uint16_t>((raw.vsys >> 1) & 0x0FFFU), 199);
-    measurements_.thermistorPermille = static_cast<uint16_t>((static_cast<uint32_t>(raw.ts & 0x0FFFU) * 961U + 500U) / 1000U);
+    if (measurements_.thermistorValid) {
+        measurements_.thermistorPermille = static_cast<uint16_t>((static_cast<uint32_t>(raw.ts & 0x0FFFU) * 961U + 500U) / 1000U);
+    }
     measurements_.dieTemperatureDeciC = static_cast<int16_t>(signExtend(raw.tdie & 0x0FFFU, 12) * 5);
 
     measurements_.valid = true;
@@ -756,6 +766,7 @@ bool BQ25628E::recordMeasurementFailure()
     if (consecutiveMeasurementFailures_ >= MAX_CONSECUTIVE_MEASUREMENT_FAILURES) {
         measurements_.valid = false;
         measurements_.batteryCurrentValid = false;
+        measurements_.thermistorValid = false;
     }
     return false;
 }

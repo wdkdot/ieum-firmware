@@ -86,6 +86,7 @@ class BQ25628E
     struct Measurements {
         bool valid = false;
         bool batteryCurrentValid = false;
+        bool thermistorValid = false;
         int16_t inputCurrentMa = 0;
         int16_t batteryCurrentMa = 0;
         uint16_t inputVoltageMv = 0;
@@ -133,6 +134,7 @@ class BQ25628E
 
   private:
     struct AdcRawValues {
+        bool thermistorValid = false;
         uint16_t ibus = 0;
         uint16_t ibat = 0;
         uint16_t vbus = 0;
@@ -166,7 +168,7 @@ class BQ25628E
     bool updateRegister8(uint8_t reg, uint8_t mask, uint8_t value);
     bool updateRegister16(uint8_t reg, uint16_t mask, uint16_t value);
     bool performAdcConversion(AdcRawValues &raw);
-    bool readAdcRawValues(AdcRawValues &raw);
+    bool readAdcRawValues(AdcRawValues &raw, bool thermistorEnabled);
     bool applyAdcValues(const AdcRawValues &raw);
     bool recordMeasurementFailure();
 };
