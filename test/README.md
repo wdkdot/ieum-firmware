@@ -320,3 +320,14 @@ A well-structured test suite follows this pattern:
 | `test_serial`                | Serial communication          |
 | `test_hop_scaling`           | Hop scaling algorithm         |
 | `test_traffic_management`    | Traffic management            |
+
+### Isolated low-battery counter regression
+
+This host-only test exercises consecutive readings, recovery, invalid readings, USB/status/ADC eligibility resets, counter saturation, one event per sequence, and the upstream 3.10 V / 11-reading defaults. It requires no device or PlatformIO dependencies:
+
+```bash
+c++ -std=c++17 -Wall -Wextra -Werror -Isrc test/power/low_battery_counter.cpp -o /tmp/low-battery-counter-test
+/tmp/low-battery-counter-test
+```
+
+The full Ieum build and hardware checks in `ieum-docs/power-system.md` separately cover integration and physical power-off behavior.

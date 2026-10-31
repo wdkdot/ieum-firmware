@@ -7,6 +7,7 @@
 #include "Default.h"
 #include "MeshRadio.h"
 #include "MeshService.h"
+#include "MessageStore.h"
 #include "NodeDB.h"
 #include "PowerMon.h"
 #include "TransmitHistory.h"
@@ -14,6 +15,7 @@
 #include "error.h"
 #include "main.h"
 #include "modules/StatusLEDModule.h"
+#include "power/BQ25628E.h"
 #include "sleep.h"
 #include "target_specific.h"
 
@@ -194,6 +196,10 @@ static void waitEnterSleep(bool skipPreflight = false)
 
             if (!Throttle::isWithinTimespanMs(now,
                                               THIRTY_SECONDS_MS)) { // If we wait too long just report an error and go to sleep
+                if (isLowBatteryShutdown()) {
+                    LOG_WARN("Low battery: sleep preflight timed out; continuing shutdown");
+                    break;
+                }
                 RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_SLEEP_ENTER_WAIT);
                 assert(0); // FIXME - for now we just restart, need to fix bug #167
                 break;
@@ -204,6 +210,23 @@ static void waitEnterSleep(bool skipPreflight = false)
     // Code that still needs to be moved into notifyObservers
     console->flush();          // send all our characters before we stop cpu clock
     setBluetoothEnable(false); // has to be off before calling light sleep
+}
+
+static bool lowBatteryShutdown = false;
+
+bool isLowBatteryShutdown()
+{
+    return lowBatteryShutdown;
+}
+
+void doLowBatteryShutdown()
+{
+    if (lowBatteryShutdown) {
+        return;
+    }
+    lowBatteryShutdown = true;
+    LOG_INFO("Low battery shutdown: saving state and entering System OFF");
+    doDeepSleep(portMAX_DELAY, false, false);
 }
 
 void doDeepSleep(uint32_t msecToWake, bool skipPreflight = false, bool skipSaveNodeDb = false)
@@ -238,6 +261,12 @@ void doDeepSleep(uint32_t msecToWake, bool skipPreflight = false, bool skipSaveN
     if (!skipSaveNodeDb) {
         nodeDB->saveToDisk();
     }
+
+#if HAS_SCREEN
+    if (isLowBatteryShutdown()) {
+        messageStore.saveToFlash();
+    }
+#endif
 
     // Persist broadcast transmit times so throttle survives reboot
     if (transmitHistory)
@@ -353,6 +382,18 @@ void doDeepSleep(uint32_t msecToWake, bool skipPreflight = false, bool skipSaveN
             LOG_INFO("PMU shutdown");
             console->flush();
             PMU->shutdown();
+        }
+    }
+#endif
+
+#if defined(HAS_BQ25628E) && defined(BQ25628E_SHUTDOWN_ON_LOW_BATTERY)
+    if (isLowBatteryShutdown()) {
+        // This must precede cpuDeepSleep(), which ends I2C before variant_shutdown().
+        const bool requested = bq25628e && bq25628e->enterShutdownMode(true);
+        if (requested) {
+            LOG_INFO("Low battery: BQ25628E shutdown accepted; entering System OFF");
+        } else {
+            LOG_WARN("Low battery: BQ25628E shutdown failed; entering System OFF without BATFET cutoff");
         }
     }
 #endif

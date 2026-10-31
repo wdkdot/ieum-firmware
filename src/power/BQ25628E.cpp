@@ -589,6 +589,7 @@ bool BQ25628E::begin(TwoWire &wire, uint8_t address, const Configuration &config
     revision_ = 0;
     initialized_ = false;
     lastStatusReadSucceeded_ = false;
+    lastMeasurementReadSucceeded_ = false;
     interruptPending_ = false;
     status_ = {};
     interruptFlags_ = {};
@@ -675,10 +676,12 @@ bool BQ25628E::refreshStatus()
 
 bool BQ25628E::updateMeasurements()
 {
+    lastMeasurementReadSucceeded_ = false;
     AdcRawValues raw;
     if (!initialized_ || !performAdcConversion(raw) || !applyAdcValues(raw)) {
         return recordMeasurementFailure();
     }
+    lastMeasurementReadSucceeded_ = true;
     return true;
 }
 
@@ -823,7 +826,7 @@ bool BQ25628E::enterShipMode(bool delayed)
 
 bool BQ25628E::enterShutdownMode(bool delayed)
 {
-    if (!initialized_ || (lastStatusReadSucceeded_ && hasInput())) {
+    if (!initialized_ || !refreshStatus() || hasInput()) {
         LOG_WARN("BQ25628E shutdown mode requires a valid device with VBUS absent");
         return false;
     }

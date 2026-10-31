@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "mesh/Throttle.h"
+#include "sleep.h"
 
 #include "./Applet.h"
 #include "./SystemApplet.h"
@@ -113,7 +114,7 @@ void InkHUD::Renderer::setInteractiveMode(bool enabled)
     }
 
     persistentInteractiveMode = false;
-    if (appletSwitchSessionActive) {
+    if (appletSwitchSessionActive || isLowBatteryShutdown()) {
         awaitUpdate();
         driver->closeInteractiveMode();
         appletSwitchSessionActive = false;
@@ -179,8 +180,7 @@ uint16_t InkHUD::Renderer::height()
 // - queuing another render: while one is already is progress
 int32_t InkHUD::Renderer::runOnce()
 {
-    if (appletSwitchSessionActive &&
-        !Throttle::isWithinTimespanMs(appletSwitchSessionStartedAt, APPLET_SWITCH_IDLE_TIMEOUT_MS)) {
+    if (appletSwitchSessionActive && !Throttle::isWithinTimespanMs(appletSwitchSessionStartedAt, APPLET_SWITCH_IDLE_TIMEOUT_MS)) {
         if (driver->busy())
             return 50UL;
 

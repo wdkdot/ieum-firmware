@@ -13,6 +13,13 @@
 #define NUM_OCV_POINTS 11
 #endif
 
+#ifndef LOW_BATTERY_MV
+#define LOW_BATTERY_MV OCV[NUM_OCV_POINTS - 1]
+#endif
+#ifndef LOW_BATTERY_READINGS
+#define LOW_BATTERY_READINGS 11
+#endif
+
 // Device specific curves go in variant.h
 #ifndef OCV_ARRAY
 #define OCV_ARRAY 4190, 4050, 3990, 3890, 3800, 3720, 3630, 3530, 3420, 3300, 3100
@@ -127,6 +134,9 @@ class Power : public concurrency::OSThread
     void reboot();
     // open circuit voltage lookup table
     uint8_t low_voltage_counter;
+#ifdef LOW_BATTERY_SAMPLE_INTERVAL_MS
+    uint32_t lastLowVoltageReadMs = 0;
+#endif
     uint32_t lastLogTime = 0;
 
 #ifdef ARCH_ESP32

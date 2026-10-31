@@ -117,6 +117,7 @@ class BQ25628E
 
     bool isReady() const { return initialized_; }
     bool lastStatusReadSucceeded() const { return lastStatusReadSucceeded_; }
+    bool lastMeasurementReadSucceeded() const { return lastMeasurementReadSucceeded_; }
     bool interruptPending() const { return interruptPending_; }
     bool hasInput() const { return status_.vbusStatus != 0U; }
     bool isCharging() const { return status_.chargeState != ChargeState::NotChargingOrTerminated; }
@@ -151,6 +152,7 @@ class BQ25628E
     uint8_t revision_ = 0;
     bool initialized_ = false;
     bool lastStatusReadSucceeded_ = false;
+    bool lastMeasurementReadSucceeded_ = false;
     volatile bool interruptPending_ = false;
     Configuration configuration_;
     Status status_;
