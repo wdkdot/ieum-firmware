@@ -23,6 +23,7 @@
 #include "main.h"
 #include "meshUtils.h"
 #include "power/BQ25628E.h"
+#include "power/LowBatteryCounter.h"
 #include "power/PowerHAL.h"
 #include "power/SGM41562.h"
 #include "sleep.h"
@@ -978,22 +979,30 @@ void Power::readPowerStatus()
 
 #endif
 
-    // If we have a battery at all and it is less than 0%, force deep sleep if we
-    // have more than 10 low readings in a row. NOTE: min LiIon/LiPo voltage
-    // is 2.0 to 2.5V, current OCV min is set to 3100 that is large enough.
-    //
-
-    if (batteryLevel && powerStatus2.getHasBattery() && !powerStatus2.getHasUSB()) {
-        if (batteryLevel->getBattVoltage() < OCV[NUM_OCV_POINTS - 1]) {
-            low_voltage_counter++;
-            LOG_DEBUG("Low voltage counter: %d/10", low_voltage_counter);
-            if (low_voltage_counter > 10) {
-                LOG_INFO("Low voltage detected, trigger deep sleep");
-                powerFSM.trigger(EVENT_LOW_BATTERY);
-            }
-        } else {
-            low_voltage_counter = 0;
-        }
+    bool eligible = batteryLevel && powerStatus2.getHasBattery() && powerStatus2.knowsUSB() && !powerStatus2.getHasUSB();
+#ifdef HAS_BQ25628E
+    // Display values may be cached after an ADC failure; protection requires a fresh reading.
+    if (batteryLevel == &bq25628eBatteryLevel) {
+        eligible = eligible && bq25628e && bq25628e->lastMeasurementReadSucceeded();
+    }
+#endif
+    const uint16_t voltageMv = eligible ? batteryLevel->getBattVoltage() : 0;
+#ifdef LOW_BATTERY_SAMPLE_INTERVAL_MS
+    if (eligible && voltageMv > 0 && voltageMv < LOW_BATTERY_MV && low_voltage_counter != 0 &&
+        Throttle::isWithinTimespanMs(lastLowVoltageReadMs, LOW_BATTERY_SAMPLE_INTERVAL_MS)) {
+        return;
+    }
+    lastLowVoltageReadMs = millis();
+#endif
+    const bool lowBattery =
+        updateLowBatteryCounter(low_voltage_counter, eligible, voltageMv, LOW_BATTERY_MV, LOW_BATTERY_READINGS);
+    if (low_voltage_counter != 0) {
+        LOG_DEBUG("Low voltage counter: %u/%u (%umV, threshold %umV)", low_voltage_counter, LOW_BATTERY_READINGS, voltageMv,
+                  LOW_BATTERY_MV);
+    }
+    if (lowBattery) {
+        LOG_INFO("Low voltage detected, trigger deep sleep");
+        powerFSM.trigger(EVENT_LOW_BATTERY);
     }
 }
 

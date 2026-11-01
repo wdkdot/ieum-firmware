@@ -51,12 +51,36 @@ Ieum에서 기대하는 역할:
 - ADC는 9-bit one-shot을 사용한다. USB 입력 중에는 모든 채널을 측정하고, 배터리 단독 구동 중에는 3.2 V 아래에서도 VBAT를 계속 측정할 수 있도록 TS ADC만 비활성화한다. 실기기에서 전체 채널 변환이 기존 60회 polling 제한을 넘는 것을 확인했으므로 실제 경과시간 기준 150 ms timeout을 적용하고, 완료되면 즉시 대기를 끝낸다.
 - ADC 또는 초기 I²C 탐색이 실패하면 실제 0 V로 게시하지 않고 이전 정상값을 제한적으로 유지하며, BQ25628E 탐색을 주기적으로 재시도한다.
 - `INT`가 누락되더라도 startup과 주기적 poll에서 read-to-clear flag, status와 fault를 읽는다. ADC 완료 인터럽트만 mask한다.
-- 유효한 VBAT 측정값은 전용 배터리 레벨 어댑터를 통해 기존 배터리 전압 공급원과 같은 Power 경로에 등록한다. USB 입력이 없고 전압이 기본 OCV 최저값 3.10 V보다 11회 연속 낮으면 기존 저전압 보호가 nRF52840을 System OFF로 전환한다.
-- Ship/Shutdown은 일반 종료 경로에서 자동 실행하지 않고, 별도 확인을 거친 명시적 호출로만 요청한다.
+- 유효한 VBAT 측정값은 전용 배터리 레벨 어댑터를 통해 기존 Power 경로에 등록한다. 저전압 보호는 기존 `EVENT_LOW_BATTERY`와 수면 observer를 재사용한다. OCV 잔량 계산은 변경하지 않는다.
+- Ieum의 검증용 초기 종료 조건은 USB 입력이 없고 유효한 새 VBAT 측정값이 **3.30 V 미만으로 3회 연속** 확인되는 것이다. 판정에 사용하는 저전압 측정은 최소 20초 간격으로 제한하므로 첫 저전압 판정부터 최소 40초가 필요하다. USB 연결, 배터리/USB 상태 불명, ADC 실패, 0 V 또는 임계값 이상 전압은 카운터를 초기화한다. 표시용 캐시값은 종료 판정에 재사용하지 않는다.
+- 위 값은 `variant.h`의 `LOW_BATTERY_MV`, `LOW_BATTERY_READINGS`, `LOW_BATTERY_SAMPLE_INTERVAL_MS`에 모아 둔다. 실측으로 검증된 배터리 보호 기준이 아니며, 최종 부하·배터리·온도 조건에서 종료 여유와 순간 강하 내성을 확인해야 한다.
+- 사용자 일반 종료에서는 Ship/Shutdown을 자동 실행하지 않는다. Ieum 저전압 종료에서만 `BQ25628E_SHUTDOWN_ON_LOW_BATTERY` 설정에 따라 지연 Shutdown을 요청한다. 명령 직전 status를 새로 읽어 VBUS 부재를 확인하며, 상태 읽기나 쓰기가 실패해도 MCU 종료를 계속한다.
 
 노란색 충전 LED를 제어하는 `STAT`도 open-drain 출력이며 충전 중 LOW다. 이는 nRF52840이 직접 구동하는 active-high LED 2개와 구분한다. BQ25628E는 배터리 유무를 신뢰성 있게 판별하는 전용 bit가 없으므로 USB 입력 중에는 ADC의 VBAT 값만으로 배터리 장착 여부를 추정하지 않는다. USB 입력이 없고 유효한 VBAT가 측정되면 실행 중인 Ieum의 전원이 배터리에서 공급되는 것으로 판정한다.
 
 320 mA와 사용자가 선택한 4.00 V/4.20 V 상한은 최종 배터리 사양 검증을 대신하지 않는다. 4.00 V 모드는 USB를 장시간 연결하는 개발 환경에서 배터리의 높은 충전 상태 체류 시간을 줄이기 위한 정책이다. 실기기 충전 전에는 셀의 최대 충전 전압·허용 전류, ILIM 실측값, TS 네트워크, USB source 전압과 충전 온도를 확인한다.
+
+## 저전압 종료 순서와 검증 상태
+
+1. 기존 PowerFSM의 저전압 이벤트에서 `doLowBatteryShutdown()`을 호출한다. 중복 요청은 무시한다.
+2. 기존 preflight로 진행 중인 무선 작업의 완료를 기다린다. 저전압에서는 30초 timeout 후 재부팅하지 않고 종료를 계속한다.
+3. 기존 deep-sleep observer로 GNSS 등 주변장치를 정리한다. InkHUD는 진행 중인 갱신을 기존 timeout 안에서 마치고 열린 패널 세션을 deep sleep·GPIO 격리·로드 스위치 차단 순서로 닫는다.
+4. InkHUD의 사용자 applet 저장, 설정과 최근 메시지 저장, 기존 NodeDB 및 송신 이력 저장을 수행한다. 일반 Screen 빌드는 기존 메시지 저장소도 저장한다. 저전압에서는 InkHUD의 추가 종료 화면 갱신과 멜로디를 생략한다. 저장은 기존 저장 API와 전원 안전성 검사를 따르며, 호출만으로 저장 성공을 보증하지 않는다.
+5. I²C가 살아 있는 `sleep.cpp`의 최종 단계에서 `enterShutdownMode(true)`를 요청한다. 기존 드라이버의 약 12.5초 지연 설정을 사용한다. `variant_shutdown()`은 `Wire.end()` 이후 호출되므로 PMIC 명령을 넣지 않는다.
+6. 기존 `cpuDeepSleep(portMAX_DELAY)`로 진입한다. 역할 및 `sds_secs`에 따른 저전력 대기 후 리셋 분기를 피하고 System OFF를 사용한다. PMIC 명령 실패 시 SYS 차단은 보증하지 않으며 MCU 저전력 상태만 유지한다.
+
+일반 종료와 일반 수면, 다른 보드의 OCV 기반 기본 임계값과 11회 판정은 유지한다. 공유 판정 코드는 조건 이탈 시 카운터 초기화, 0 V 배제, 포화 및 이벤트 중복 방지를 보완했다. nRF52 플랫폼 코드와 `variant_shutdown()`은 변경하지 않았다.
+
+2026-11-01 코드 검증: `pio run -e ieum` 빌드 성공(RAM 92,876 B, Flash 662,992 B). `test/power/low_battery_counter.cpp`의 독립 C++17 호스트 회귀 테스트 3개 시나리오가 통과했다. Docker 기반 기존 네이티브 테스트는 Docker 데몬 미실행으로 실행하지 못했다. 운영자가 BLE OTA로 실기기 플래시 완료를 확인했다. 저전압 종료, BATFET/SYS 차단, USB 복구 및 설정 유지의 실기기 검증은 아직 보고되지 않았다.
+
+실기기 원인은 아직 미확정이다. 가변 전원으로 다음을 검증한 뒤 하드웨어 검증 완료로 표시한다.
+
+- 3.30 V 전후의 지속 저전압, 순간 강하 후 회복, ADC/I²C 실패, USB 연결 시 카운터 초기화
+- PMIC 인터럽트가 연속 발생해도 판정 간 최소 20초 유지
+- tracker/sensor 절전 설정에서도 종료 후 주기적 재부팅 없음
+- 종료 중 E-ink BUSY timeout, GNSS UART 격리, 각 전원 레일의 역급전 및 off 전류
+- Shutdown 성공/실패 로그, SYS 및 3V3_MAIN 차단, USB 재연결 부팅과 설정/메시지 유지
+- 일반 종료·일반 수면 회귀 및 LoRa/BLE/USB/SWD 복구
 
 ## SGM6036-3.3
 

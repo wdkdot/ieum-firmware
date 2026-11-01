@@ -334,9 +334,11 @@ int InkHUD::Events::beforeDeepSleep(void *unused)
         ua->onDeactivate();
         ua->onShutdown();
     }
-    for (SystemApplet *sa : inkhud->systemApplets) {
-        // Note: no onDeactivate. System applets are always active.
-        sa->onShutdown();
+    if (!isLowBatteryShutdown()) {
+        for (SystemApplet *sa : inkhud->systemApplets) {
+            // Note: no onDeactivate. System applets are always active.
+            sa->onShutdown();
+        }
     }
 
     // User has successful executed a safe shutdown
@@ -345,6 +347,11 @@ int InkHUD::Events::beforeDeepSleep(void *unused)
 
     inkhud->persistence->saveSettings();
     inkhud->persistence->saveLatestMessage();
+
+    // Keep the last image: shutdown refreshes and melody consume the remaining battery reserve.
+    if (isLowBatteryShutdown()) {
+        return 0;
+    }
 
     // LogoApplet::onShutdown attempted to heal the display by drawing a "shutting down" screen twice,
     // then prepared a final powered-off screen for us, which shows device shortname.
